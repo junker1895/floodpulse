@@ -575,54 +575,20 @@ canvas#spark { width:100%; height:55px; display:block; margin-top:8px; }
         </div>
       </div>
 
-      <!-- GAUGES -->
-      <div class="sb-section">
-        <div class="sb-title">River Gauges — SE QLD</div>
-        <div class="gauge sel" onclick="focusGauge(this,-27.51,152.87)">
-          <div class="g-ico" style="background:rgba(255,79,79,.12)">🌊</div>
-          <div class="g-info">
-            <div class="g-name">Colleges Crossing</div>
-            <div class="g-bar-row"><div class="g-bar"><div class="g-fill" style="width:88%;background:var(--high)"></div></div><div class="g-pct" style="color:var(--high)">88%</div></div>
-          </div>
-          <div class="g-trend">📈</div>
-          <div class="g-lvl" style="color:var(--high)"><span class="gv">8.4m</span><span class="gu">+0.4/hr</span></div>
+      <!-- GAUGES — national, state tabs -->
+      <div class="sb-section" style="padding-bottom:0">
+        <div class="sb-title">River Gauges — Australia</div>
+        <div class="state-tabs" id="stateTabs">
+          <button class="stab active" onclick="switchState('QLD',this)">QLD</button>
+          <button class="stab" onclick="switchState('NSW',this)">NSW</button>
+          <button class="stab" onclick="switchState('VIC',this)">VIC</button>
+          <button class="stab" onclick="switchState('WA',this)">WA</button>
+          <button class="stab" onclick="switchState('SA',this)">SA</button>
+          <button class="stab" onclick="switchState('NT',this)">NT</button>
         </div>
-        <div class="gauge" onclick="focusGauge(this,-27.46,152.57)">
-          <div class="g-ico" style="background:rgba(245,197,66,.12)">🌊</div>
-          <div class="g-info">
-            <div class="g-name">Lowood (Brisbane R.)</div>
-            <div class="g-bar-row"><div class="g-bar"><div class="g-fill" style="width:62%;background:var(--mid)"></div></div><div class="g-pct" style="color:var(--mid)">62%</div></div>
-          </div>
-          <div class="g-trend">📈</div>
-          <div class="g-lvl" style="color:var(--mid)"><span class="gv">5.1m</span><span class="gu">+0.2/hr</span></div>
-        </div>
-        <div class="gauge" onclick="focusGauge(this,-26.97,152.33)">
-          <div class="g-ico" style="background:rgba(245,197,66,.12)">🌊</div>
-          <div class="g-info">
-            <div class="g-name">Kilcoy (Stanley R.)</div>
-            <div class="g-bar-row"><div class="g-bar"><div class="g-fill" style="width:54%;background:var(--mid)"></div></div><div class="g-pct" style="color:var(--mid)">54%</div></div>
-          </div>
-          <div class="g-trend">➡</div>
-          <div class="g-lvl" style="color:var(--mid)"><span class="gv">3.8m</span><span class="gu">stable</span></div>
-        </div>
-        <div class="gauge" onclick="focusGauge(this,-27.64,152.58)">
-          <div class="g-ico" style="background:rgba(34,217,138,.1)">🌊</div>
-          <div class="g-info">
-            <div class="g-name">Rosewood (Bremer R.)</div>
-            <div class="g-bar-row"><div class="g-bar"><div class="g-fill" style="width:28%;background:var(--low)"></div></div><div class="g-pct" style="color:var(--low)">28%</div></div>
-          </div>
-          <div class="g-trend">📉</div>
-          <div class="g-lvl" style="color:var(--low)"><span class="gv">1.9m</span><span class="gu">−0.1/hr</span></div>
-        </div>
-        <div class="gauge" onclick="focusGauge(this,-27.19,152.83)">
-          <div class="g-ico" style="background:rgba(34,217,138,.1)">🌊</div>
-          <div class="g-info">
-            <div class="g-name">Dayboro (N.Pine R.)</div>
-            <div class="g-bar-row"><div class="g-bar"><div class="g-fill" style="width:22%;background:var(--low)"></div></div><div class="g-pct" style="color:var(--low)">22%</div></div>
-          </div>
-          <div class="g-trend">📉</div>
-          <div class="g-lvl" style="color:var(--low)"><span class="gv">1.4m</span><span class="gu">−0.2/hr</span></div>
-        </div>
+      </div>
+      <div class="sb-section" style="padding-top:6px">
+        <div id="gaugeList"><!-- rendered by JS --></div>
       </div>
 
       <!-- TIMELINE -->
@@ -634,7 +600,7 @@ canvas#spark { width:100%; height:55px; display:block; margin-top:8px; }
     </div>
 
     <div class="sb-foot">
-      <span>Open-Meteo · GloFAS · OpenStreetMap</span>
+      <span>Open-Meteo · GloFAS · RainViewer · OpenStreetMap</span>
       <a>Sources ↗</a>
     </div>
   </div>
@@ -663,7 +629,7 @@ tick(); setInterval(tick, 30000);
 //  MAP
 // ══════════════════════════════════════════
 const map = L.map('map', {
-  center: [-27.47, 152.65], zoom: 9,
+  center: [-25.5, 134.0], zoom: 4,
   zoomControl: false, attributionControl: false
 });
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:18 }).addTo(map);
@@ -699,13 +665,98 @@ const zoneCircles = zones.map(z => L.circle([z.lat,z.lng], {
 //  River discharge from Open-Meteo Flood API
 //  Normal flow ranges derived from GloFAS baselines
 // ══════════════════════════════════════════
+// ── National gauge network — 30 sites across 6 states ──
+// GloFAS thresholds estimated from historical peak flows
 const gaugeConfig = [
-  { lat:-27.51, lng:152.87, name:'Colleges Crossing', river:'Bremer R.',   normalMin:5,   normalMax:150,  floodThreshold:300  },
-  { lat:-27.46, lng:152.57, name:'Lowood',            river:'Brisbane R.', normalMin:10,  normalMax:400,  floodThreshold:800  },
-  { lat:-26.97, lng:152.33, name:'Kilcoy',            river:'Stanley R.',  normalMin:2,   normalMax:80,   floodThreshold:160  },
-  { lat:-27.64, lng:152.58, name:'Rosewood',          river:'Bremer R.',   normalMin:1,   normalMax:50,   floodThreshold:100  },
-  { lat:-27.19, lng:152.83, name:'Dayboro',           river:'N. Pine R.',  normalMin:1,   normalMax:40,   floodThreshold:80   },
+  // QLD
+  { state:'QLD', lat:-27.51, lng:152.87, name:'Colleges Crossing', river:'Bremer R.',      normalMin:5,   floodThreshold:300  },
+  { state:'QLD', lat:-27.46, lng:152.57, name:'Lowood',            river:'Brisbane R.',    normalMin:10,  floodThreshold:800  },
+  { state:'QLD', lat:-26.97, lng:152.33, name:'Kilcoy',            river:'Stanley R.',     normalMin:2,   floodThreshold:160  },
+  { state:'QLD', lat:-27.64, lng:152.58, name:'Rosewood',          river:'Bremer R.',      normalMin:1,   floodThreshold:100  },
+  { state:'QLD', lat:-27.19, lng:152.83, name:'Dayboro',           river:'N. Pine R.',     normalMin:1,   floodThreshold:80   },
+  { state:'QLD', lat:-19.26, lng:146.82, name:'Townsville',        river:'Ross R.',        normalMin:1,   floodThreshold:120  },
+  { state:'QLD', lat:-16.92, lng:145.77, name:'Cairns',            river:'Barron R.',      normalMin:5,   floodThreshold:400  },
+  { state:'QLD', lat:-23.38, lng:150.51, name:'Rockhampton',       river:'Fitzroy R.',     normalMin:50,  floodThreshold:2500 },
+  { state:'QLD', lat:-26.56, lng:148.60, name:'Roma',              river:'Maranoa R.',     normalMin:1,   floodThreshold:500  },
+  // NSW
+  { state:'NSW', lat:-31.95, lng:115.86, name:'Windsor',           river:'Hawkesbury R.',  normalMin:5,   floodThreshold:1200 },
+  { state:'NSW', lat:-33.74, lng:150.67, name:'Penrith',           river:'Nepean R.',      normalMin:5,   floodThreshold:600  },
+  { state:'NSW', lat:-29.68, lng:152.93, name:'Grafton',           river:'Clarence R.',    normalMin:20,  floodThreshold:3000 },
+  { state:'NSW', lat:-30.08, lng:148.01, name:'Bourke',            river:'Darling R.',     normalMin:10,  floodThreshold:800  },
+  { state:'NSW', lat:-35.12, lng:147.36, name:'Wagga Wagga',       river:'Murrumbidgee R.',normalMin:15,  floodThreshold:1500 },
+  { state:'NSW', lat:-32.24, lng:148.59, name:'Dubbo',             river:'Macquarie R.',   normalMin:5,   floodThreshold:700  },
+  { state:'NSW', lat:-28.81, lng:153.28, name:'Lismore',           river:'Wilson R.',      normalMin:3,   floodThreshold:500  },
+  // VIC
+  { state:'VIC', lat:-37.82, lng:144.95, name:'Melbourne',         river:'Yarra R.',       normalMin:5,   floodThreshold:300  },
+  { state:'VIC', lat:-36.36, lng:145.40, name:'Shepparton',        river:'Goulburn R.',    normalMin:10,  floodThreshold:900  },
+  { state:'VIC', lat:-36.14, lng:146.91, name:'Wodonga',           river:'Murray R.',      normalMin:50,  floodThreshold:2000 },
+  { state:'VIC', lat:-38.22, lng:146.42, name:'Traralgon',         river:'Latrobe R.',     normalMin:3,   floodThreshold:400  },
+  { state:'VIC', lat:-37.56, lng:143.86, name:'Ballarat',          river:'Yarrowee R.',    normalMin:1,   floodThreshold:80   },
+  // WA
+  { state:'WA',  lat:-31.95, lng:115.86, name:'Perth (Swan R.)',   river:'Swan R.',        normalMin:2,   floodThreshold:350  },
+  { state:'WA',  lat:-33.33, lng:115.64, name:'Busselton',         river:'Vasse R.',       normalMin:1,   floodThreshold:60   },
+  { state:'WA',  lat:-17.96, lng:122.24, name:'Broome',            river:'Dampier Ck.',    normalMin:0,   floodThreshold:200  },
+  { state:'WA',  lat:-20.31, lng:118.58, name:'Port Hedland',      river:'De Grey R.',     normalMin:0,   floodThreshold:800  },
+  // SA
+  { state:'SA',  lat:-34.93, lng:138.60, name:'Adelaide',          river:'Torrens R.',     normalMin:0,   floodThreshold:60   },
+  { state:'SA',  lat:-34.10, lng:140.75, name:'Renmark',           river:'Murray R.',      normalMin:100, floodThreshold:1800 },
+  { state:'SA',  lat:-37.83, lng:140.78, name:'Mt Gambier',        river:'Glenelg R.',     normalMin:1,   floodThreshold:120  },
+  // NT
+  { state:'NT',  lat:-12.46, lng:130.84, name:'Darwin',            river:'Elizabeth R.',   normalMin:0,   floodThreshold:300  },
+  { state:'NT',  lat:-13.72, lng:136.18, name:'Katherine',         river:'Katherine R.',   normalMin:2,   floodThreshold:2000 },
 ];
+
+// active state filter
+let activeState = 'QLD';
+
+function switchState(state, btn) {
+  activeState = state;
+  document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  // Fly map to state centre
+  const centres = {
+    QLD:[-22.5, 144.0, 6], NSW:[-32.0, 147.0, 6], VIC:[-36.8, 144.5, 6],
+    WA: [-25.0, 121.0, 5], SA: [-30.0, 135.5, 6], NT: [-19.0, 133.5, 6]
+  };
+  const [lat, lng, zoom] = centres[state];
+  map.flyTo([lat, lng], zoom, { duration: 1.2 });
+
+  renderGaugeList();
+}
+
+function renderGaugeList() {
+  const list = document.getElementById('gaugeList');
+  if (!list) return;
+  list.innerHTML = '';
+  gaugeConfig.forEach((g, i) => {
+    if (g.state !== activeState) return;
+    const cached = gaugeCache[i];
+    const risk  = cached ? cached.risk : 'low';
+    const pct   = cached ? cached.pct  : 0;
+    const lvl   = cached ? cached.discharge.toFixed(0)+' m³/s' : '—';
+    const rate  = cached ? cached.rateStr : '…';
+    const trend = cached ? cached.trend : '➡';
+    const riskColor = { high:'#ff4f4f', mid:'#f5c542', low:'#22d98a' }[risk];
+    const base  = { high:'255,79,79', mid:'245,197,66', low:'34,217,138' }[risk];
+
+    const el = document.createElement('div');
+    el.className = 'gauge' + (i === 0 && activeState === 'QLD' ? ' sel' : '');
+    el.setAttribute('onclick', `focusGauge(this,${g.lat},${g.lng})`);
+    el.innerHTML = `
+      <div class="g-ico" style="background:rgba(${base},.1)">🌊</div>
+      <div class="g-info">
+        <div class="g-name">${g.name} <span style="color:var(--muted);font-size:9px">${g.river}</span></div>
+        <div class="g-bar-row"><div class="g-bar"><div class="g-fill" style="width:${pct}%;background:${riskColor}"></div></div><div class="g-pct" style="color:${riskColor}">${pct}%</div></div>
+      </div>
+      <div class="g-trend">${trend}</div>
+      <div class="g-lvl" style="color:${riskColor}"><span class="gv">${lvl}</span><span class="gu">${rate}</span></div>`;
+    list.appendChild(el);
+  });
+}
+
+// Cache for gauge data keyed by index
+const gaugeCache = {};
 
 const statusStyle = {
   high:'background:rgba(255,79,79,.15);color:#ff6b6b;',
@@ -717,60 +768,74 @@ const statusLabel = { high:'⚠ High Risk — Rising', mid:'~ Moderate — Monit
 // Markers array so we can update popups after data loads
 const gaugeMarkers = [];
 
-// Place markers with loading state initially
+// Place markers for ALL gauges nationally
 gaugeConfig.forEach((g, i) => {
   const icon = L.divIcon({
     className:'',
     html:`<div class="fw-marker low" id="marker-${i}">~</div>`,
-    iconSize:[36,36], iconAnchor:[18,18], popupAnchor:[0,-20]
+    iconSize:[30,30], iconAnchor:[15,15], popupAnchor:[0,-18]
   });
   const m = L.marker([g.lat,g.lng], { icon }).addTo(map);
-  m.bindPopup(`<div class="popup-title">📍 ${g.name}</div><div style="color:var(--muted);font-size:11px;font-family:'DM Mono',monospace">Loading live data…</div>`, { maxWidth:220 });
+  m.bindPopup(`<div class="popup-title">📍 ${g.name}</div><div style="color:var(--muted);font-size:11px;font-family:'DM Mono',monospace">${g.state} · ${g.river}<br>Loading live data…</div>`, { maxWidth:220 });
   gaugeMarkers.push(m);
 });
 
+// Initial render of gauge list
+renderGaugeList();
+
 // ══════════════════════════════════════════
-//  OPEN-METEO FLOOD API — fetch discharge
-//  for all gauges in parallel
+//  OPEN-METEO FLOOD API — fetch all gauges
 // ══════════════════════════════════════════
 function classifyRisk(discharge, cfg) {
-  const pct = (discharge - cfg.normalMin) / (cfg.floodThreshold - cfg.normalMin) * 100;
   if (discharge >= cfg.floodThreshold * 0.75) return 'high';
   if (discharge >= cfg.floodThreshold * 0.35) return 'mid';
   return 'low';
 }
 
 function pctOfFlood(discharge, cfg) {
-  return Math.min(99, Math.max(2, Math.round(
+  return Math.min(99, Math.max(1, Math.round(
     (discharge - cfg.normalMin) / (cfg.floodThreshold - cfg.normalMin) * 100
   )));
 }
 
 async function fetchGaugeData() {
-  const promises = gaugeConfig.map((g, i) =>
-    fetch(`https://flood-api.open-meteo.com/v1/flood?latitude=${g.lat}&longitude=${g.lng}&daily=river_discharge&forecast_days=7&past_days=2`)
-      .then(r => r.json())
-      .then(data => ({ i, g, data }))
-      .catch(err => ({ i, g, data: null, err }))
-  );
+  // Batch into groups of 5 to avoid hammering the API
+  const batchSize = 5;
+  const results = [];
+  for (let b = 0; b < gaugeConfig.length; b += batchSize) {
+    const batch = gaugeConfig.slice(b, b + batchSize).map((g, j) => {
+      const i = b + j;
+      return fetch(`https://flood-api.open-meteo.com/v1/flood?latitude=${g.lat}&longitude=${g.lng}&daily=river_discharge&forecast_days=7&past_days=2`)
+        .then(r => r.json())
+        .then(data => ({ i, g, data }))
+        .catch(err => ({ i, g, data: null }));
+    });
+    const batchResults = await Promise.all(batch);
+    results.push(...batchResults);
+    // Small delay between batches
+    if (b + batchSize < gaugeConfig.length) await new Promise(r => setTimeout(r, 300));
+  }
 
-  const results = await Promise.all(promises);
   let highestRisk = 'low';
   let maxPct = 0;
+  const alertData = [];
 
   results.forEach(({ i, g, data }) => {
     if (!data || !data.daily) return;
 
     const discharges = data.daily.river_discharge;
-    const today = discharges[2] || discharges[0]; // index 2 = today with past_days=2
+    const today     = discharges[2] || discharges[0];
     const yesterday = discharges[1] || today;
-    const tomorrow = discharges[3] || today;
+    const tomorrow  = discharges[3] || today;
 
-    const risk = classifyRisk(today, g);
-    const pct  = pctOfFlood(today, g);
-    const trend = today > yesterday * 1.05 ? '📈' : today < yesterday * 0.95 ? '📉' : '➡';
+    const risk    = classifyRisk(today, g);
+    const pct     = pctOfFlood(today, g);
+    const trend   = today > yesterday * 1.05 ? '📈' : today < yesterday * 0.95 ? '📉' : '➡';
     const rateVal = today - yesterday;
     const rateStr = rateVal > 0.5 ? `+${rateVal.toFixed(0)}m³/s` : rateVal < -0.5 ? `${rateVal.toFixed(0)}m³/s` : 'stable';
+
+    // Store in cache
+    gaugeCache[i] = { risk, pct, discharge: today, rateStr, trend, tomorrow };
 
     if (risk === 'high' || (risk === 'mid' && highestRisk === 'low')) highestRisk = risk;
     if (pct > maxPct) maxPct = pct;
@@ -778,7 +843,7 @@ async function fetchGaugeData() {
     const riskColor = { high:'#ff4f4f', mid:'#f5c542', low:'#22d98a' }[risk];
     const sym = { high:'⚠', mid:'~', low:'✓' }[risk];
 
-    // Update marker icon
+    // Update map marker
     const markerEl = document.getElementById(`marker-${i}`);
     if (markerEl) {
       markerEl.className = `fw-marker ${risk}`;
@@ -788,7 +853,7 @@ async function fetchGaugeData() {
     // Update popup
     gaugeMarkers[i].setPopupContent(`
       <div class="popup-title">📍 ${g.name}</div>
-      <div class="popup-row"><span>${g.river}</span></div>
+      <div class="popup-row"><span>${g.state} · ${g.river}</span></div>
       <div class="popup-row"><span>Discharge</span><span>${today.toFixed(1)} m³/s</span></div>
       <div class="popup-row"><span>Change</span><span>${rateStr}</span></div>
       <div class="popup-row"><span>Flood capacity</span><span>${pct}%</span></div>
@@ -796,48 +861,13 @@ async function fetchGaugeData() {
       <div class="popup-status" style="${statusStyle[risk]}">${statusLabel[risk]}</div>
     `);
 
-    // Update sidebar gauge row
-    const gaugeRows = document.querySelectorAll('.gauge');
-    if (gaugeRows[i]) {
-      const fill = gaugeRows[i].querySelector('.g-fill');
-      const pctEl = gaugeRows[i].querySelector('.g-pct');
-      const lvlEl = gaugeRows[i].querySelector('.gv');
-      const unitEl = gaugeRows[i].querySelector('.gu');
-      const trendEl = gaugeRows[i].querySelector('.g-trend');
-      const lvlWrap = gaugeRows[i].querySelector('.g-lvl');
-      const icoEl = gaugeRows[i].querySelector('.g-ico');
-
-      if (fill)    { fill.style.width = pct+'%'; fill.style.background = riskColor; }
-      if (pctEl)   { pctEl.textContent = pct+'%'; pctEl.style.color = riskColor; }
-      if (lvlEl)   { lvlEl.textContent = today.toFixed(0)+' m³/s'; }
-      if (unitEl)  { unitEl.textContent = rateStr; }
-      if (trendEl) { trendEl.textContent = trend; }
-      if (lvlWrap) { lvlWrap.style.color = riskColor; }
-      if (icoEl)   {
-        const alpha = { high:'.12', mid:'.12', low:'.1' }[risk];
-        const base  = { high:'255,79,79', mid:'245,197,66', low:'34,217,138' }[risk];
-        icoEl.style.background = `rgba(${base},${alpha})`;
-      }
-    }
-
-    // Update flood zone circle colour based on live risk
-    const zc = zoneCircles[i];
-    if (zc) {
-      zc.setStyle({
-        color: riskColor, fillColor: riskColor,
-        fillOpacity: 0.12, weight: 1.5, opacity: 0.45,
-        dashArray: risk === 'low' ? '4,6' : null
-      });
-    }
+    alertData.push({ name: g.name, river: g.river, state: g.state, risk });
   });
 
-  // Update verdict and alerts
+  // Re-render visible gauge list with fresh data
+  renderGaugeList();
   updateVerdict(highestRisk, maxPct);
-  updateAlerts(results.map(({g, data}) => {
-    if (!data || !data.daily) return { name: g.name, river: g.river, risk: 'low' };
-    const today = data.daily.river_discharge[2] || data.daily.river_discharge[0];
-    return { name: g.name, river: g.river, risk: classifyRisk(today, g) };
-  }));
+  updateAlerts(alertData);
 }
 
 function updateVerdict(risk, pct) {
@@ -875,7 +905,7 @@ function updateAlerts(gaugeResults) {
   const alerts = [];
 
   if (highGauges.length > 0) {
-    const names = highGauges.map(g => g.name).join(', ');
+    const names = highGauges.map(g => `${g.name} (${g.state||''})`).join(', ');
     alerts.push({
       cls: 'alert-high', ico: '🔴',
       hd: `Flood Warning — ${highGauges.length > 1 ? 'Multiple Rivers' : highGauges[0].river}`,
@@ -883,7 +913,7 @@ function updateAlerts(gaugeResults) {
     });
   }
   if (midGauges.length > 0) {
-    const names = midGauges.map(g => g.name).join(', ');
+    const names = midGauges.map(g => `${g.name} (${g.state||''})`).join(', ');
     alerts.push({
       cls: 'alert-mid', ico: '🟡',
       hd: `Flood Watch — ${midGauges.length > 1 ? 'Multiple Rivers' : midGauges[0].river}`,
