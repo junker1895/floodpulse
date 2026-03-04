@@ -767,6 +767,19 @@ async function loadLOD(lod) {
   }
 }
 
+// Min drainage area (km²) to show at each zoom level
+// Keeps the map clean — only show rivers proportional to zoom detail
+function minAreaForZoom(zoom) {
+  if (zoom <= 4)  return 80000;   // only the very largest (Murray, Darling scale)
+  if (zoom <= 5)  return 30000;
+  if (zoom <= 6)  return 10000;
+  if (zoom <= 7)  return 3000;
+  if (zoom <= 8)  return 1000;
+  if (zoom <= 9)  return 300;
+  if (zoom <= 10) return 100;
+  return 30;                      // zoom 11+ show most named rivers
+}
+
 async function fetchRiverSegments() {
   const zoom = map.getZoom();
   if (zoom < 4) {
@@ -781,9 +794,10 @@ async function fetchRiverSegments() {
 
   currentLOD = lod;
 
-  const b   = map.getBounds();
-  const w   = b.getWest(), s = b.getSouth(), e = b.getEast(), n = b.getNorth();
-  const pad = 0.5;
+  const b      = map.getBounds();
+  const w      = b.getWest(), s = b.getSouth(), e = b.getEast(), n = b.getNorth();
+  const pad    = 0.2;
+  const minArea = minAreaForZoom(zoom);
 
   riverSegments = [];
   features.forEach(f => {
@@ -791,10 +805,13 @@ async function fetchRiverSegments() {
     const geom  = f.geometry;
     if (!geom) return;
 
+    const area = props.area || 0;
+    if (area < minArea) return;   // skip rivers too small for this zoom
+
     const name    = props.name || '';
     const flowdir = props.flowdir || 1;
-    const area    = props.area   || 0;   // stored as km² by fetch_rivers.py
-    const width   = Math.min(5, Math.max(2, Math.log10(Math.max(1, area)) * 0.8 + 1));
+    // Width: 1px for small rivers, up to 2.5px for the biggest
+    const width   = Math.min(2.5, Math.max(0.8, Math.log10(Math.max(1, area / minArea)) * 0.8 + 0.8));
     const color   = matchRiverColor(name);
 
     const lines = geom.type === 'MultiLineString' ? geom.coordinates : [geom.coordinates];
@@ -809,7 +826,7 @@ async function fetchRiverSegments() {
     });
   });
 
-  console.log('[Rivers] Segments in viewport:', riverSegments.length, '| LOD:', lod, '| zoom:', zoom);
+  console.log('[Rivers] zoom:', zoom, 'minArea:', minArea, 'segments:', riverSegments.length);
   rebuildParticles();
 }
 
@@ -833,17 +850,17 @@ function buildScreenCache() {
   );
 }
 
-const MAX_PARTICLES = 600;
+const MAX_PARTICLES = 400;
 
 function rebuildParticles() {
   riverParticles = [];
   if (!particleVisible) return;
   buildScreenCache();
 
-  // Sort segments by area descending — prioritise major rivers
+  // One particle per segment, prioritise largest rivers
   const indexed = riverSegments
     .map((seg, si) => ({ si, seg }))
-    .sort((a, b) => (b.seg.pts.length - a.seg.pts.length));
+    .sort((a, b) => b.seg.width - a.seg.width);
 
   for (const { si, seg } of indexed) {
     if (riverParticles.length >= MAX_PARTICLES) break;
@@ -852,9 +869,9 @@ function rebuildParticles() {
     riverParticles.push({
       si,
       t: Math.random(),
-      speed: 0.0010 + Math.random() * 0.0006,
-      size: Math.max(2.5, seg.width),
-      alpha: 0.75 + Math.random() * 0.2,
+      speed: 0.0014 + Math.random() * 0.0008,
+      size: Math.max(2, seg.width * 1.4),
+      alpha: 0.85 + Math.random() * 0.15,
     });
   }
 }
@@ -886,17 +903,17 @@ function ptAtT(sPts, t) {
 
 function drawRiverLines() {
   const zoom = map.getZoom();
+  const baseAlpha = Math.min(0.45, 0.1 + (zoom - 3) * 0.05);
   riverSegments.forEach((seg, si) => {
     const sPts = screenPtsCache[si];
     if (!sPts || sPts.length < 2) return;
     const color = matchRiverColor(seg.name);
-    const w = Math.max(0.5, seg.width * Math.max(0.3, (zoom - 3) / 8));
     riverCtx.beginPath();
     riverCtx.moveTo(sPts[0].x, sPts[0].y);
     for (let i = 1; i < sPts.length; i++) riverCtx.lineTo(sPts[i].x, sPts[i].y);
     riverCtx.strokeStyle = color;
-    riverCtx.lineWidth = w;
-    riverCtx.globalAlpha = Math.min(0.55, 0.15 + (zoom - 3) * 0.06);
+    riverCtx.lineWidth = seg.width;
+    riverCtx.globalAlpha = baseAlpha;
     riverCtx.stroke();
   });
 }
