@@ -547,28 +547,16 @@ canvas#spark { width:100%; height:55px; display:block; margin-top:8px; }
     </div>
 
     <div class="sb-scroll">
-      <!-- ALERTS -->
+      <!-- ALERTS — dynamic -->
       <div class="sb-section">
-        <div class="sb-title">Active BOM Alerts</div>
-        <div class="alert alert-high">
-          <div class="a-ico">🔴</div>
-          <div>
-            <div class="a-hd">Flash Flood Warning — SE QLD</div>
-            <div class="a-bd">Colleges Crossing 8.4m and rising. Road closures active.</div>
-          </div>
-        </div>
-        <div class="alert alert-mid">
-          <div class="a-ico">🟡</div>
-          <div>
-            <div class="a-hd">Flood Watch — Brisbane River</div>
-            <div class="a-bd">Forecast 3.5m at Moggill. Be prepared to act.</div>
-          </div>
-        </div>
-        <div class="alert alert-info">
-          <div class="a-ico">🔵</div>
-          <div>
-            <div class="a-hd">Heavy Rainfall Continuing</div>
-            <div class="a-bd">80–120mm overnight. Peak 11pm–3am AEST.</div>
+        <div class="sb-title">Flood Status</div>
+        <div id="alertsContainer">
+          <div class="alert alert-info">
+            <div class="a-ico">🔵</div>
+            <div>
+              <div class="a-hd">Loading live data…</div>
+              <div class="a-bd">Fetching real-time river conditions from GloFAS.</div>
+            </div>
           </div>
         </div>
       </div>
@@ -818,15 +806,24 @@ async function fetchGaugeData() {
       }
     }
 
-    // Update flood zone circle size based on risk
+    // Update flood zone circle colour based on live risk
     const zc = zoneCircles[i];
     if (zc) {
-      zc.setStyle({ color: riskColor, fillColor: riskColor });
+      zc.setStyle({
+        color: riskColor, fillColor: riskColor,
+        fillOpacity: 0.12, weight: 1.5, opacity: 0.45,
+        dashArray: risk === 'low' ? '4,6' : null
+      });
     }
   });
 
-  // Update verdict
+  // Update verdict and alerts
   updateVerdict(highestRisk, maxPct);
+  updateAlerts(results.map(({g, data}) => {
+    if (!data || !data.daily) return { name: g.name, river: g.river, risk: 'low' };
+    const today = data.daily.river_discharge[2] || data.daily.river_discharge[0];
+    return { name: g.name, river: g.river, risk: classifyRisk(today, g) };
+  }));
 }
 
 function updateVerdict(risk, pct) {
@@ -850,6 +847,54 @@ function updateVerdict(risk, pct) {
     sRisk.textContent = risk.toUpperCase();
     sRisk.className = `rr-val rr-risk-${risk}`;
   }
+}
+
+// ══════════════════════════════════════════
+//  DYNAMIC ALERTS — based on real gauge data
+// ══════════════════════════════════════════
+function updateAlerts(gaugeResults) {
+  const container = document.getElementById('alertsContainer');
+  if (!container) return;
+
+  const highGauges = gaugeResults.filter(g => g.risk === 'high');
+  const midGauges  = gaugeResults.filter(g => g.risk === 'mid');
+  const alerts = [];
+
+  if (highGauges.length > 0) {
+    const names = highGauges.map(g => g.name).join(', ');
+    alerts.push({
+      cls: 'alert-high', ico: '🔴',
+      hd: `Flood Warning — ${highGauges.length > 1 ? 'Multiple Rivers' : highGauges[0].river}`,
+      bd: `${names} above flood threshold. Avoid low-lying areas near waterways.`
+    });
+  }
+  if (midGauges.length > 0) {
+    const names = midGauges.map(g => g.name).join(', ');
+    alerts.push({
+      cls: 'alert-mid', ico: '🟡',
+      hd: `Flood Watch — ${midGauges.length > 1 ? 'Multiple Rivers' : midGauges[0].river}`,
+      bd: `${names} elevated. Monitor conditions closely.`
+    });
+  }
+  if (alerts.length === 0) {
+    alerts.push({
+      cls: 'alert-info', ico: '✅',
+      hd: 'All Rivers Normal',
+      bd: 'No flood warnings active for SE Queensland. Conditions are currently stable.'
+    });
+  }
+  // Always add data source note
+  alerts.push({
+    cls: 'alert-info', ico: '🔵',
+    hd: 'Live Data Active',
+    bd: `River discharge from GloFAS via Open-Meteo. Updated ${new Date().toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit'})} AEST.`
+  });
+
+  container.innerHTML = alerts.map(a => `
+    <div class="alert ${a.cls}">
+      <div class="a-ico">${a.ico}</div>
+      <div><div class="a-hd">${a.hd}</div><div class="a-bd">${a.bd}</div></div>
+    </div>`).join('');
 }
 
 // ══════════════════════════════════════════
