@@ -839,38 +839,50 @@ function matchRiverColor(name) {
   return key ? riskColorMap[key] : '#4aa8ff';
 }
 
+// Pre-convert segment geo coords → screen px cache
+// Rebuilt on moveend/zoomend alongside rebuildParticles
+let screenPtsCache = [];
+
+function buildScreenCache() {
+  screenPtsCache = riverSegments.map(seg =>
+    seg.pts.map(c => {
+      const p = map.latLngToContainerPoint(L.latLng(c[1], c[0]));
+      return { x: p.x, y: p.y };
+    })
+  );
+}
+
 function rebuildParticles() {
   riverParticles = [];
   if (!particleVisible) return;
+  buildScreenCache();
   riverSegments.forEach((seg, si) => {
-    // Particle count scales with segment point count (proxy for length)
-    const n = Math.max(1, Math.round(seg.pts.length * 0.8));
+    const sPts = screenPtsCache[si];
+    if (!sPts || sPts.length < 2) return;
+    // 1 particle per segment — enough to show flow on every river
+    const n = Math.max(1, Math.min(4, Math.round(seg.pts.length * 0.4)));
     for (let i = 0; i < n; i++) {
       riverParticles.push({
         si,
         t: Math.random(),
-        speed: (0.0008 + Math.random() * 0.0005) / Math.max(3, seg.pts.length * 0.3),
-        size: seg.width * 0.7,
-        alpha: 0.5 + Math.random() * 0.4,
+        speed: 0.0012 + Math.random() * 0.0008,
+        size: Math.max(3, seg.width * 1.2),
+        alpha: 0.7 + Math.random() * 0.3,
       });
     }
   });
 }
 
-// Convert [lng, lat] GeoJSON coord to canvas pixel
-function geoToScreen(lnglat) {
-  const p = map.latLngToContainerPoint(L.latLng(lnglat[1], lnglat[0]));
-  return { x: p.x, y: p.y };
-}
+// Rebuild screen cache on pan (coords shift) without full particle rebuild
+map.on('move', () => { buildScreenCache(); });
 
-function ptAtT(pts, t) {
-  const sPts = pts.map(geoToScreen);
+function ptAtT(sPts, t) {
   let total = 0;
   const lens = [];
   for (let i = 1; i < sPts.length; i++) {
     const dx = sPts[i].x - sPts[i-1].x, dy = sPts[i].y - sPts[i-1].y;
-    const l = Math.sqrt(dx*dx + dy*dy);
-    lens.push(l); total += l;
+    lens.push(Math.sqrt(dx*dx + dy*dy));
+    total += lens[lens.length-1];
   }
   if (total === 0) return { x: sPts[0].x, y: sPts[0].y, angle: 0 };
   let target = t * total, walked = 0;
@@ -892,26 +904,23 @@ function tickRiverParticles() {
   if (!particleVisible) { requestAnimationFrame(tickRiverParticles); return; }
 
   riverParticles.forEach(p => {
-    const seg = riverSegments[p.si];
-    if (!seg) return;
+    const seg  = riverSegments[p.si];
+    const sPts = screenPtsCache[p.si];
+    if (!seg || !sPts || sPts.length < 2) return;
     p.t += p.speed;
     if (p.t >= 1) p.t = 0;
-    const pos = ptAtT(seg.pts, p.t);
+    const pos = ptAtT(sPts, p.t);
     if (pos.x < -20 || pos.x > W+20 || pos.y < -20 || pos.y > H+20) return;
-
-    // Update color dynamically (risk may have loaded after particles were built)
     const color = matchRiverColor(seg.name);
-    seg.color = color;
-
     riverCtx.save();
     riverCtx.globalAlpha = p.alpha;
     riverCtx.fillStyle = color;
     riverCtx.shadowColor = color;
-    riverCtx.shadowBlur = p.size * 2.5;
+    riverCtx.shadowBlur = p.size * 3;
     riverCtx.translate(pos.x, pos.y);
     riverCtx.rotate(pos.angle);
     riverCtx.beginPath();
-    riverCtx.ellipse(0, 0, p.size * 1.8, p.size * 0.55, 0, 0, Math.PI * 2);
+    riverCtx.ellipse(0, 0, p.size * 2, p.size * 0.6, 0, 0, Math.PI * 2);
     riverCtx.fill();
     riverCtx.restore();
   });
