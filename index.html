@@ -761,7 +761,7 @@ async function fetchGaugeData() {
     if (risk === 'high' || (risk === 'mid' && highestRisk === 'low')) highestRisk = risk;
     if (pct > maxPct) maxPct = pct;
 
-    const riskColor = { high:'var(--high)', mid:'var(--mid)', low:'var(--low)' }[risk];
+    const riskColor = { high:'#ff4f4f', mid:'#f5c542', low:'#22d98a' }[risk];
     const sym = { high:'⚠', mid:'~', low:'✓' }[risk];
 
     // Update marker icon
