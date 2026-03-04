@@ -143,6 +143,9 @@ nav {
 .leaflet-tile { filter: brightness(0.30) saturate(0.4) hue-rotate(190deg); }
 .river-flow-canvas { filter: none !important; }
 .river-svg-line { filter: none !important; }
+.leaflet-overlay-pane svg path.river-svg-line { filter: none !important; }
+/* River canvas must not be darkened */
+#map > canvas { filter: none !important; }
 
 /* Radar tiles must NOT get the dark filter — keep their vivid colours */
 .leaflet-overlay-pane .leaflet-tile,
@@ -655,6 +658,11 @@ const map = L.map('map', {
   zoomControl: false, attributionControl: false
 });
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:18 }).addTo(map);
+
+// Custom pane for river SVG lines — sits above tiles, below markers, no dark filter
+map.createPane('riverPane');
+map.getPane('riverPane').style.zIndex = 300;
+map.getPane('riverPane').style.filter = 'none';
 L.control.attribution({ position:'bottomleft', prefix:false })
   .addAttribution('<span style="color:#4a6080;font-size:9px;font-family:monospace">© OpenStreetMap</span>')
   .addTo(map);
@@ -766,25 +774,29 @@ function buildRiverSVG() {
     const w = r.width * Math.max(0.5, Math.min(1.8, (zoom - 2) / 6));
     const pl = L.polyline(r.ll, {
       color: r.color, weight: w, opacity: alpha,
-      smoothFactor: 1.5, className: 'river-svg-line'
+      smoothFactor: 1.5, className: 'river-svg-line',
+      pane: 'riverPane'
     }).addTo(map);
     riverSVGLayers.push(pl);
   });
 }
 
 // ── Canvas particle overlay — fixed to viewport, recomputes each frame ──
+// Canvas sits INSIDE the map container, absolutely positioned
+// so latLngToContainerPoint coords align perfectly
 const riverCanvas = document.createElement('canvas');
-riverCanvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:450;';
+riverCanvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:450;';
 document.getElementById('map').appendChild(riverCanvas);
 const riverCtx = riverCanvas.getContext('2d');
 
-// Resize canvas to match viewport
 function resizeRiverCanvas() {
-  riverCanvas.width  = window.innerWidth;
-  riverCanvas.height = window.innerHeight;
+  const mapEl = document.getElementById('map');
+  riverCanvas.width  = mapEl.offsetWidth;
+  riverCanvas.height = mapEl.offsetHeight;
 }
 resizeRiverCanvas();
 window.addEventListener('resize', resizeRiverCanvas);
+map.on('resize', resizeRiverCanvas);
 
 // Particles: each has a river index + t (0→1 along path)
 let riverParticles = [];
