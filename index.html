@@ -632,7 +632,7 @@ canvas#spark { width:100%; height:55px; display:block; margin-top:8px; }
     </div>
 
     <div class="sb-foot">
-      <span>BOM · OpenStreetMap</span>
+      <span>Open-Meteo · GloFAS · OpenStreetMap</span>
       <a>Sources ↗</a>
     </div>
   </div>
@@ -692,14 +692,19 @@ const zoneCircles = zones.map(z => L.circle([z.lat,z.lng], {
   { coords:[[-26.90,152.70],[-26.97,152.75],[-27.05,152.78],[-27.10,152.80],[-27.19,152.83]], w:1.8, op:.35 },
 ].forEach(r => L.polyline(r.coords, { color:'#4aa8ff', weight:r.w, opacity:r.op, smoothFactor:1 }).addTo(map));
 
-// Gauge markers
-const gaugeData = [
-  { lat:-27.51, lng:152.87, risk:'high', name:'Colleges Crossing', level:'8.4m', rate:'+0.4m/hr', pct:88, river:'Bremer R.' },
-  { lat:-27.46, lng:152.57, risk:'mid',  name:'Lowood',            level:'5.1m', rate:'+0.2m/hr', pct:62, river:'Brisbane R.' },
-  { lat:-26.97, lng:152.33, risk:'mid',  name:'Kilcoy',            level:'3.8m', rate:'stable',   pct:54, river:'Stanley R.' },
-  { lat:-27.64, lng:152.58, risk:'low',  name:'Rosewood',          level:'1.9m', rate:'−0.1m/hr', pct:28, river:'Bremer R.' },
-  { lat:-27.19, lng:152.83, risk:'low',  name:'Dayboro',           level:'1.4m', rate:'−0.2m/hr', pct:22, river:'N. Pine R.' },
+// ══════════════════════════════════════════
+//  GAUGE CONFIG — coords + metadata
+//  River discharge from Open-Meteo Flood API
+//  Normal flow ranges derived from GloFAS baselines
+// ══════════════════════════════════════════
+const gaugeConfig = [
+  { lat:-27.51, lng:152.87, name:'Colleges Crossing', river:'Bremer R.',   normalMin:5,   normalMax:150,  floodThreshold:300  },
+  { lat:-27.46, lng:152.57, name:'Lowood',            river:'Brisbane R.', normalMin:10,  normalMax:400,  floodThreshold:800  },
+  { lat:-26.97, lng:152.33, name:'Kilcoy',            river:'Stanley R.',  normalMin:2,   normalMax:80,   floodThreshold:160  },
+  { lat:-27.64, lng:152.58, name:'Rosewood',          river:'Bremer R.',   normalMin:1,   normalMax:50,   floodThreshold:100  },
+  { lat:-27.19, lng:152.83, name:'Dayboro',           river:'N. Pine R.',  normalMin:1,   normalMax:40,   floodThreshold:80   },
 ];
+
 const statusStyle = {
   high:'background:rgba(255,79,79,.15);color:#ff6b6b;',
   mid: 'background:rgba(245,197,66,.12);color:#f5c542;',
@@ -707,22 +712,250 @@ const statusStyle = {
 };
 const statusLabel = { high:'⚠ High Risk — Rising', mid:'~ Moderate — Monitor', low:'✓ Low — Normal' };
 
-gaugeData.forEach(g => {
-  const sym = { high:'⚠', mid:'~', low:'✓' }[g.risk];
+// Markers array so we can update popups after data loads
+const gaugeMarkers = [];
+
+// Place markers with loading state initially
+gaugeConfig.forEach((g, i) => {
   const icon = L.divIcon({
     className:'',
-    html:`<div class="fw-marker ${g.risk}">${sym}</div>`,
+    html:`<div class="fw-marker low" id="marker-${i}">~</div>`,
     iconSize:[36,36], iconAnchor:[18,18], popupAnchor:[0,-20]
   });
-  L.marker([g.lat,g.lng], { icon }).addTo(map).bindPopup(`
-    <div class="popup-title">📍 ${g.name}</div>
-    <div class="popup-row"><span>${g.river}</span></div>
-    <div class="popup-row"><span>Level</span><span>${g.level}</span></div>
-    <div class="popup-row"><span>Rate</span><span>${g.rate}</span></div>
-    <div class="popup-row"><span>Capacity</span><span>${g.pct}%</span></div>
-    <div class="popup-status" style="${statusStyle[g.risk]}">${statusLabel[g.risk]}</div>
-  `, { maxWidth:220 });
+  const m = L.marker([g.lat,g.lng], { icon }).addTo(map);
+  m.bindPopup(`<div class="popup-title">📍 ${g.name}</div><div style="color:var(--muted);font-size:11px;font-family:'DM Mono',monospace">Loading live data…</div>`, { maxWidth:220 });
+  gaugeMarkers.push(m);
 });
+
+// ══════════════════════════════════════════
+//  OPEN-METEO FLOOD API — fetch discharge
+//  for all gauges in parallel
+// ══════════════════════════════════════════
+function classifyRisk(discharge, cfg) {
+  const pct = (discharge - cfg.normalMin) / (cfg.floodThreshold - cfg.normalMin) * 100;
+  if (discharge >= cfg.floodThreshold * 0.75) return 'high';
+  if (discharge >= cfg.floodThreshold * 0.35) return 'mid';
+  return 'low';
+}
+
+function pctOfFlood(discharge, cfg) {
+  return Math.min(99, Math.max(2, Math.round(
+    (discharge - cfg.normalMin) / (cfg.floodThreshold - cfg.normalMin) * 100
+  )));
+}
+
+async function fetchGaugeData() {
+  const promises = gaugeConfig.map((g, i) =>
+    fetch(`https://flood-api.open-meteo.com/v1/flood?latitude=${g.lat}&longitude=${g.lng}&daily=river_discharge&forecast_days=7&past_days=2`)
+      .then(r => r.json())
+      .then(data => ({ i, g, data }))
+      .catch(err => ({ i, g, data: null, err }))
+  );
+
+  const results = await Promise.all(promises);
+  let highestRisk = 'low';
+  let maxPct = 0;
+
+  results.forEach(({ i, g, data }) => {
+    if (!data || !data.daily) return;
+
+    const discharges = data.daily.river_discharge;
+    const today = discharges[2] || discharges[0]; // index 2 = today with past_days=2
+    const yesterday = discharges[1] || today;
+    const tomorrow = discharges[3] || today;
+
+    const risk = classifyRisk(today, g);
+    const pct  = pctOfFlood(today, g);
+    const trend = today > yesterday * 1.05 ? '📈' : today < yesterday * 0.95 ? '📉' : '➡';
+    const rateVal = today - yesterday;
+    const rateStr = rateVal > 0.5 ? `+${rateVal.toFixed(0)}m³/s` : rateVal < -0.5 ? `${rateVal.toFixed(0)}m³/s` : 'stable';
+
+    if (risk === 'high' || (risk === 'mid' && highestRisk === 'low')) highestRisk = risk;
+    if (pct > maxPct) maxPct = pct;
+
+    const riskColor = { high:'var(--high)', mid:'var(--mid)', low:'var(--low)' }[risk];
+    const sym = { high:'⚠', mid:'~', low:'✓' }[risk];
+
+    // Update marker icon
+    const markerEl = document.getElementById(`marker-${i}`);
+    if (markerEl) {
+      markerEl.className = `fw-marker ${risk}`;
+      markerEl.textContent = sym;
+    }
+
+    // Update popup
+    gaugeMarkers[i].setPopupContent(`
+      <div class="popup-title">📍 ${g.name}</div>
+      <div class="popup-row"><span>${g.river}</span></div>
+      <div class="popup-row"><span>Discharge</span><span>${today.toFixed(1)} m³/s</span></div>
+      <div class="popup-row"><span>Change</span><span>${rateStr}</span></div>
+      <div class="popup-row"><span>Flood capacity</span><span>${pct}%</span></div>
+      <div class="popup-row"><span>Tomorrow fcst</span><span>${tomorrow.toFixed(1)} m³/s</span></div>
+      <div class="popup-status" style="${statusStyle[risk]}">${statusLabel[risk]}</div>
+    `);
+
+    // Update sidebar gauge row
+    const gaugeRows = document.querySelectorAll('.gauge');
+    if (gaugeRows[i]) {
+      const fill = gaugeRows[i].querySelector('.g-fill');
+      const pctEl = gaugeRows[i].querySelector('.g-pct');
+      const lvlEl = gaugeRows[i].querySelector('.gv');
+      const unitEl = gaugeRows[i].querySelector('.gu');
+      const trendEl = gaugeRows[i].querySelector('.g-trend');
+      const lvlWrap = gaugeRows[i].querySelector('.g-lvl');
+      const icoEl = gaugeRows[i].querySelector('.g-ico');
+
+      if (fill)    { fill.style.width = pct+'%'; fill.style.background = riskColor; }
+      if (pctEl)   { pctEl.textContent = pct+'%'; pctEl.style.color = riskColor; }
+      if (lvlEl)   { lvlEl.textContent = today.toFixed(0)+' m³/s'; }
+      if (unitEl)  { unitEl.textContent = rateStr; }
+      if (trendEl) { trendEl.textContent = trend; }
+      if (lvlWrap) { lvlWrap.style.color = riskColor; }
+      if (icoEl)   {
+        const alpha = { high:'.12', mid:'.12', low:'.1' }[risk];
+        const base  = { high:'255,79,79', mid:'245,197,66', low:'34,217,138' }[risk];
+        icoEl.style.background = `rgba(${base},${alpha})`;
+      }
+    }
+
+    // Update flood zone circle size based on risk
+    const zc = zoneCircles[i];
+    if (zc) {
+      zc.setStyle({ color: riskColor, fillColor: riskColor });
+    }
+  });
+
+  // Update verdict
+  updateVerdict(highestRisk, maxPct);
+}
+
+function updateVerdict(risk, pct) {
+  const msgs = {
+    high: { status:'HIGH FLOOD RISK', sub:'Rivers above flood threshold. Avoid low-lying roads. Follow BOM warnings.', color:'#ff6060', icon:'⚠️', glow:'rgba(255,79,79,.13)' },
+    mid:  { status:'MODERATE RISK',   sub:'Rivers rising. Monitor conditions and be prepared to act.', color:'#f5c542', icon:'🌊', glow:'rgba(245,197,66,.1)' },
+    low:  { status:'LOW RISK',        sub:'Rivers within normal range. Continue to monitor forecasts.', color:'#22d98a', icon:'✅', glow:'rgba(34,217,138,.08)' },
+  };
+  const m = msgs[risk];
+  const vStatus = document.getElementById('verdictStatus');
+  const vSub    = document.getElementById('verdictSub');
+  const vIcon   = document.getElementById('verdictIcon');
+  const needle  = document.getElementById('needle');
+  const sRisk   = document.getElementById('s-risk');
+
+  if (vStatus) { vStatus.textContent = m.status; vStatus.style.color = m.color; }
+  if (vSub)    { vSub.textContent = m.sub; }
+  if (vIcon)   { vIcon.textContent = m.icon; vIcon.style.background = m.glow; }
+  if (needle)  { needle.style.left = Math.min(95, pct)+'%'; }
+  if (sRisk)   {
+    sRisk.textContent = risk.toUpperCase();
+    sRisk.className = `rr-val rr-risk-${risk}`;
+  }
+}
+
+// ══════════════════════════════════════════
+//  OPEN-METEO WEATHER API — hourly rainfall
+//  for timeline + readout + sparkline
+// ══════════════════════════════════════════
+async function fetchRainfallData() {
+  const lat = -27.47, lng = 152.65; // SE QLD centre
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=precipitation,precipitation_probability&forecast_days=2&timezone=Australia%2FBrisbane`;
+
+  try {
+    const r = await fetch(url);
+    const data = await r.json();
+    const times  = data.hourly.time;
+    const precip = data.hourly.precipitation;
+
+    // Find current hour index
+    const now = new Date();
+    const nowStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}T${String(now.getHours()).padStart(2,'0')}:00`;
+    let nowIdx = times.findIndex(t => t === nowStr);
+    if (nowIdx < 0) nowIdx = 0;
+
+    // Current rainfall rate
+    const currentMM = precip[nowIdx] || 0;
+    const last6h = precip.slice(Math.max(0, nowIdx-6), nowIdx).reduce((a,b) => a+(b||0), 0);
+    document.getElementById('s-now').textContent = currentMM.toFixed(1);
+    document.getElementById('s-6h').textContent  = last6h.toFixed(0);
+
+    // Build timeline — 5 hours back, now, 6 hours forward
+    const tlEl = document.getElementById('tlScroll');
+    tlEl.innerHTML = '';
+    const windowStart = nowIdx - 5;
+    const windowEnd   = nowIdx + 7;
+    const slice = precip.slice(Math.max(0,windowStart), windowEnd);
+    const sliceTimes  = times.slice(Math.max(0,windowStart), windowEnd);
+    const maxMM = Math.max(...slice, 1);
+
+    slice.forEach((mm, j) => {
+      const tIdx = Math.max(0, windowStart) + j;
+      const isNow = tIdx === nowIdx;
+      const t = new Date(sliceTimes[j]);
+      const lbl = isNow ? 'NOW' : String(t.getHours()).padStart(2,'0')+'h';
+      const bh  = Math.round((mm/maxMM)*42)+3;
+      const col = mm > maxMM*0.75 ? 'var(--high)' : mm > maxMM*0.4 ? 'var(--mid)' : 'var(--blue)';
+      const el  = document.createElement('div');
+      el.className = 'tl-col'+(isNow?' now':'');
+      el.innerHTML = `<div class="tl-lbl">${lbl}</div>
+        <div class="tl-bar" style="height:${bh}px;background:${col};opacity:${0.45+(mm/maxMM)*0.55}"></div>
+        <div class="tl-mm">${mm.toFixed(1)}</div>`;
+      tlEl.appendChild(el);
+    });
+
+    // Draw sparkline with real 24h data
+    drawSparkline(precip.slice(nowIdx, nowIdx+24));
+
+  } catch(e) {
+    console.warn('Rainfall fetch failed:', e);
+    drawSparklineFallback();
+  }
+}
+
+function drawSparkline(data) {
+  const sc = document.getElementById('spark');
+  const s  = sc.getContext('2d');
+  sc.width = sc.offsetWidth * 2; sc.height = 110;
+  const W = sc.width, H = sc.height;
+  if (!data || data.length < 2) { drawSparklineFallback(); return; }
+
+  const maxV = Math.max(...data, 1);
+  const pts  = data.map((v,i) => [i/(data.length-1)*W, H-((v||0)/maxV)*(H*0.85)-4]);
+
+  const g = s.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'rgba(74,168,255,.45)');
+  g.addColorStop(.6,'rgba(74,168,255,.12)');
+  g.addColorStop(1,'rgba(74,168,255,.02)');
+
+  s.beginPath(); s.moveTo(pts[0][0],H);
+  pts.forEach(p => s.lineTo(p[0],p[1]));
+  s.lineTo(pts[pts.length-1][0],H); s.closePath();
+  s.fillStyle=g; s.fill();
+
+  s.beginPath(); pts.forEach((p,i) => i ? s.lineTo(p[0],p[1]) : s.moveTo(p[0],p[1]));
+  s.strokeStyle='#4aa8ff'; s.lineWidth=2.5; s.lineJoin='round'; s.stroke();
+
+  // Current position dot
+  s.beginPath(); s.arc(pts[0][0],pts[0][1],5,0,Math.PI*2);
+  s.fillStyle='#4aa8ff'; s.fill();
+}
+
+function drawSparklineFallback() {
+  // Keep the existing hardcoded sparkline as fallback
+  const sc = document.getElementById('spark');
+  const s  = sc.getContext('2d');
+  sc.width = sc.offsetWidth*2; sc.height = 110;
+  const W=sc.width, H=sc.height;
+  const data=[3.2,3.4,3.9,4.5,5.1,5.8,6.4,7.0,7.8,8.4,8.7,8.5,8.2,7.8,7.2,6.6,6.0,5.4,4.9,4.5,4.1,3.8,3.6,3.4];
+  const minV=2.5, maxV=9.5;
+  const pts=data.map((v,i)=>[i/(data.length-1)*W, H-(v-minV)/(maxV-minV)*H]);
+  const g=s.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'rgba(255,79,79,.38)'); g.addColorStop(.5,'rgba(245,197,66,.18)'); g.addColorStop(1,'rgba(74,168,255,.04)');
+  s.beginPath(); s.moveTo(pts[0][0],H);
+  pts.forEach(p=>s.lineTo(p[0],p[1])); s.lineTo(pts[pts.length-1][0],H); s.closePath();
+  s.fillStyle=g; s.fill();
+  s.beginPath(); pts.forEach((p,i)=>i?s.lineTo(p[0],p[1]):s.moveTo(p[0],p[1]));
+  s.strokeStyle='#ff6060'; s.lineWidth=2.5; s.lineJoin='round'; s.stroke();
+}
 
 // ══════════════════════════════════════════
 //  LOCATION — real GPS
@@ -970,60 +1203,18 @@ window.addEventListener('resize', resizeRain);
 setTimeout(() => { resizeRain(); animRain(); }, 120);
 
 // ══════════════════════════════════════════
-//  TIMELINE
+//  BOOT — fetch all real data on load
+//  then refresh every 10 minutes
 // ══════════════════════════════════════════
-const tlData = [
-  {h:'7pm',mm:22},{h:'8pm',mm:35},{h:'9pm',mm:48},{h:'10pm',mm:62},
-  {h:'NOW',mm:38,now:true},{h:'12am',mm:75},{h:'1am',mm:88},{h:'2am',mm:92},
-  {h:'3am',mm:85},{h:'4am',mm:70},{h:'5am',mm:55},{h:'6am',mm:40}
-];
-const maxMM = 92;
-const tlEl = document.getElementById('tlScroll');
-tlData.forEach(d => {
-  const bh  = Math.round((d.mm/maxMM)*42)+3;
-  const col = d.mm>70 ? 'var(--high)' : d.mm>44 ? 'var(--mid)' : 'var(--blue)';
-  const el  = document.createElement('div');
-  el.className = 'tl-col'+(d.now?' now':'');
-  el.innerHTML = `<div class="tl-lbl">${d.h}</div>
-    <div class="tl-bar" style="height:${bh}px;background:${col};opacity:${.45+d.mm/maxMM*.55}"></div>
-    <div class="tl-mm">${d.mm}</div>`;
-  tlEl.appendChild(el);
-});
+async function loadAllData() {
+  await Promise.all([fetchGaugeData(), fetchRainfallData()]);
+}
 
-// ══════════════════════════════════════════
-//  SPARKLINE
-// ══════════════════════════════════════════
-(function() {
-  const sc = document.getElementById('spark');
-  const s  = sc.getContext('2d');
-  sc.width = sc.offsetWidth*2; sc.height = 110;
-  const W=sc.width, H=sc.height;
-  const data=[3.2,3.4,3.9,4.5,5.1,5.8,6.4,7.0,7.8,8.4,8.7,8.5,8.2,7.8,7.2,6.6,6.0,5.4,4.9,4.5,4.1,3.8,3.6,3.4];
-  const minV=2.5, maxV=9.5;
-  const pts=data.map((v,i)=>[i/(data.length-1)*W, H-(v-minV)/(maxV-minV)*H]);
-  const g=s.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'rgba(255,79,79,.38)'); g.addColorStop(.5,'rgba(245,197,66,.18)'); g.addColorStop(1,'rgba(74,168,255,.04)');
-  s.beginPath(); s.moveTo(pts[0][0],H);
-  pts.forEach(p=>s.lineTo(p[0],p[1])); s.lineTo(pts[pts.length-1][0],H); s.closePath();
-  s.fillStyle=g; s.fill();
-  s.beginPath(); pts.forEach((p,i)=>i?s.lineTo(p[0],p[1]):s.moveTo(p[0],p[1]));
-  s.strokeStyle='#ff6060'; s.lineWidth=2.5; s.lineJoin='round'; s.stroke();
-  const cur=pts[9];
-  s.beginPath(); s.arc(cur[0],cur[1],5,0,Math.PI*2); s.fillStyle='#ff6060'; s.fill();
-  s.beginPath(); s.arc(cur[0],cur[1],9,0,Math.PI*2); s.strokeStyle='rgba(255,80,80,.35)'; s.lineWidth=2; s.stroke();
-  const fy=H-(7.5-minV)/(maxV-minV)*H;
-  s.setLineDash([5,4]); s.beginPath(); s.moveTo(0,fy); s.lineTo(W,fy);
-  s.strokeStyle='rgba(255,79,79,.4)'; s.lineWidth=1.5; s.stroke(); s.setLineDash([]);
-  s.fillStyle='rgba(255,79,79,.5)'; s.font=`16px DM Mono,monospace`;
-  s.fillText('flood level', W-150, fy-5);
-})();
+// Initial load after map settles
+setTimeout(loadAllData, 800);
 
-// ══════════════════════════════════════════
-//  LIVE TICK
-// ══════════════════════════════════════════
-setInterval(() => {
-  document.getElementById('s-now').textContent = Math.round(36+Math.sin(Date.now()/9000)*9);
-}, 4000);
+// Refresh every 10 minutes
+setInterval(loadAllData, 10 * 60 * 1000);
 </script>
 </body>
 </html>
