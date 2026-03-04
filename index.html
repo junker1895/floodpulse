@@ -884,11 +884,37 @@ function ptAtT(sPts, t) {
   return { x: last.x, y: last.y, angle: 0 };
 }
 
+function drawRiverLines() {
+  const zoom = map.getZoom();
+  riverSegments.forEach((seg, si) => {
+    const sPts = screenPtsCache[si];
+    if (!sPts || sPts.length < 2) return;
+    const color = matchRiverColor(seg.name);
+    const w = Math.max(0.5, seg.width * Math.max(0.3, (zoom - 3) / 8));
+    riverCtx.beginPath();
+    riverCtx.moveTo(sPts[0].x, sPts[0].y);
+    for (let i = 1; i < sPts.length; i++) riverCtx.lineTo(sPts[i].x, sPts[i].y);
+    riverCtx.strokeStyle = color;
+    riverCtx.lineWidth = w;
+    riverCtx.globalAlpha = Math.min(0.55, 0.15 + (zoom - 3) * 0.06);
+    riverCtx.stroke();
+  });
+}
+
 function tickRiverParticles() {
   const W = riverCanvas.width, H = riverCanvas.height;
   riverCtx.clearRect(0, 0, W, H);
   if (!particleVisible) { requestAnimationFrame(tickRiverParticles); return; }
 
+  // Draw river lines first, particles on top
+  riverCtx.save();
+  riverCtx.globalAlpha = 1;
+  riverCtx.lineJoin = 'round';
+  riverCtx.lineCap  = 'round';
+  drawRiverLines();
+  riverCtx.restore();
+
+  // Draw particles
   riverParticles.forEach(p => {
     const seg  = riverSegments[p.si];
     const sPts = screenPtsCache[p.si];
@@ -901,11 +927,10 @@ function tickRiverParticles() {
     riverCtx.save();
     riverCtx.globalAlpha = p.alpha;
     riverCtx.fillStyle = color;
-    // No shadowBlur — too expensive with many particles
     riverCtx.translate(pos.x, pos.y);
     riverCtx.rotate(pos.angle);
     riverCtx.beginPath();
-    riverCtx.ellipse(0, 0, p.size * 2, p.size * 0.65, 0, 0, Math.PI * 2);
+    riverCtx.ellipse(0, 0, p.size * 2.2, p.size * 0.6, 0, 0, Math.PI * 2);
     riverCtx.fill();
     riverCtx.restore();
   });
