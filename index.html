@@ -1223,12 +1223,12 @@ let animationTimer = null;
 let isPlaying = false;
 
 // Color scheme 6 = "TheWeatherChannel" blue→green→yellow→red
-const RADAR_COLOR  = 6;
+const RADAR_COLOR  = 2;  // Original - vivid green/yellow/red, best on dark maps
 const RADAR_SMOOTH = 1;
 const RADAR_SNOW   = 0;
 const RADAR_SIZE   = 256;
 const RADAR_EXT    = 'png';
-const RADAR_OPACITY = 0.55;
+const RADAR_OPACITY = 0.8;
 
 function loadRainViewerData() {
   fetch('https://api.rainviewer.com/public/weather-maps.json')
