@@ -713,40 +713,8 @@ const zoneCircles = zones.map(z => L.circle([z.lat,z.lng], {
 // River coords removed — BOM Geofabric feature service used instead
 
 
-// ══════════════════════════════════════════
-//  GEOFABRIC TILE LAYER
-//  Geoscience Australia official river geometry
-// ══════════════════════════════════════════
-const GEOFABRIC_URL = 'https://tiles.arcgis.com/tiles/vkTwD8kHw2woKBqV/arcgis/rest/services/Queensland_Catchments_and_Rivers__Geofabric_v3/MapServer/tile/{z}/{y}/{x}';
-
-const riverTileLayer = L.tileLayer(GEOFABRIC_URL, {
-  minZoom: 4, maxZoom: 13, opacity: 0.0,
-  pane: 'riverPane',
-  attribution: 'Rivers: Geoscience Australia Geofabric v3',
-  crossOrigin: true,
-  updateWhenIdle: true,      // only load tiles when map stops moving
-  updateWhenZooming: false,  // don't reload mid-zoom
-  keepBuffer: 1,
-});
-riverTileLayer.addTo(map);
-riverTileLayer.once('load', () => fadeRiverTiles(0.75));
-
-function fadeRiverTiles(target) {
-  let op = riverTileLayer.options.opacity || 0;
-  clearInterval(riverTileLayer._fi);
-  riverTileLayer._fi = setInterval(() => {
-    op = Math.min(target, op + 0.05);
-    riverTileLayer.setOpacity(op);
-    if (op >= target) clearInterval(riverTileLayer._fi);
-  }, 30);
-}
-
-function setRiverTileOpacity(visible) {
-  if (visible) fadeRiverTiles(0.75);
-  else riverTileLayer.setOpacity(0);
-}
-
-function buildRiverSVG() { /* tiles handle visuals */ }
+function setRiverTileOpacity() { /* tile layer removed */ }
+function buildRiverSVG() { /* no-op */ }
 
 // ══════════════════════════════════════════
 //  FLOW PARTICLES
@@ -786,22 +754,22 @@ async function loadLOD(lod) {
   if (riverCache[lod]) return riverCache[lod];
   try {
     const url = RIVERS_LOD[lod];
-    console.log('Loading river LOD:', lod);
+    console.log('[Rivers] Fetching', url);
     const resp = await fetch(url);
-    if (!resp.ok) throw new Error(url + ' not found — run fetch_rivers.py first');
+    if (!resp.ok) throw new Error(resp.status + ' ' + url);
     const data = await resp.json();
     riverCache[lod] = data.features || [];
-    console.log('Cached', riverCache[lod].length, 'segments for LOD:', lod);
+    console.log('[Rivers] Loaded LOD:', lod, '—', riverCache[lod].length, 'features');
     return riverCache[lod];
   } catch (e) {
-    console.warn('River LOD unavailable:', e.message);
+    console.warn('[Rivers] LOD load failed:', e.message);
     return [];
   }
 }
 
 async function fetchRiverSegments() {
   const zoom = map.getZoom();
-  if (zoom < 5) {
+  if (zoom < 4) {
     riverSegments = [];
     riverParticles = [];
     return;
@@ -841,7 +809,7 @@ async function fetchRiverSegments() {
     });
   });
 
-  console.log('River segments in viewport:', riverSegments.length);
+  console.log('[Rivers] Segments in viewport:', riverSegments.length, '| LOD:', lod, '| zoom:', zoom);
   rebuildParticles();
 }
 
@@ -944,8 +912,8 @@ function tickRiverParticles() {
 map.on('moveend', fetchRiverSegments);
 map.on('zoomend', fetchRiverSegments);
 
-// Preload overview LOD immediately, detail LOD loads on demand
-fetchRiverSegments();
+// Load rivers after map is ready
+map.whenReady(() => setTimeout(fetchRiverSegments, 500));
 requestAnimationFrame(tickRiverParticles);
 
 // Called when gauge risk data loads
@@ -1539,9 +1507,9 @@ function togglePill(el, layer) {
     document.getElementById('radarTimestamp').style.display = layerState.radar ? 'block' : 'none';
   }
   if (layer === 'rivers') {
-    setRiverTileOpacity(layerState.rivers);
     particleVisible = layerState.rivers;
     if (layerState.rivers) fetchRiverSegments();
+    else { riverSegments = []; riverParticles = []; }
   }
 }
 
