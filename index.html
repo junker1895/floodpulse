@@ -141,7 +141,6 @@ nav {
   /* On mobile, map fills full screen behind bottom sheet */
 }
 .leaflet-tile { filter: brightness(0.30) saturate(0.4) hue-rotate(190deg); }
-.river-flow-canvas { filter: none !important; }
 .river-svg-line { filter: none !important; }
 .leaflet-overlay-pane svg path.river-svg-line { filter: none !important; }
 /* River canvas must not be darkened */
@@ -683,157 +682,84 @@ const zoneCircles = zones.map(z => L.circle([z.lat,z.lng], {
 }).addTo(map));
 
 // ══════════════════════════════════════════
-//  RIVER FLOW SYSTEM — real OSM geometry
-//  Fetched from Overpass API at load time
-//  SVG lines (Leaflet-positioned) + canvas particles
+//  RIVER FLOW SYSTEM
+//  Embedded coordinates (source→mouth)
+//  SVG lines via Leaflet pane (zoom-stable)
+//  Canvas particles anchored to map coords
 // ══════════════════════════════════════════
 
-// River definitions: OSM relation/way IDs + display config
-// minZoom: first zoom level at which this river is visible
-const RIVER_DEFS = [
-  // name, overpass query tag, minZoom, width, order
-  { name:'Murray',         q:'name="Murray River"',       minZoom:4, width:3.0 },
-  { name:'Darling',        q:'name="Darling River"',      minZoom:4, width:2.6 },
-  { name:'Murrumbidgee',   q:'name="Murrumbidgee River"', minZoom:4, width:2.2 },
-  { name:'Lachlan',        q:'name="Lachlan River"',      minZoom:5, width:1.8 },
-  { name:'Macquarie',      q:'name="Macquarie River"',    minZoom:5, width:1.8 },
-  { name:'Fitzroy',        q:'name="Fitzroy River"',      minZoom:4, width:2.6 },
-  { name:'Flinders',       q:'name="Flinders River"',     minZoom:4, width:2.2 },
-  { name:'Burdekin',       q:'name="Burdekin River"',     minZoom:5, width:2.0 },
-  { name:'Brisbane',       q:'name="Brisbane River"',     minZoom:6, width:2.0 },
-  { name:'Hawkesbury',     q:'name="Hawkesbury River"',   minZoom:6, width:1.8 },
-  { name:'Hunter',         q:'name="Hunter River"',       minZoom:6, width:1.8 },
-  { name:'Clarence',       q:'name="Clarence River"',     minZoom:6, width:1.8 },
-  { name:'Yarra',          q:'name="Yarra River"',        minZoom:6, width:1.8 },
-  { name:'Goulburn',       q:'name="Goulburn River"',     minZoom:6, width:1.8 },
-  { name:'Latrobe',        q:'name="Latrobe River"',      minZoom:7, width:1.5 },
-  { name:'Swan',           q:'name="Swan River"',         minZoom:6, width:1.8 },
-  { name:'Katherine',      q:'name="Katherine River"',    minZoom:6, width:2.0 },
-  { name:'Daly',           q:'name="Daly River"',         minZoom:6, width:1.8 },
-  { name:'Gascoyne',       q:'name="Gascoyne River"',     minZoom:6, width:1.8 },
-  { name:'Murchison',      q:'name="Murchison River"',    minZoom:6, width:1.8 },
-  { name:'Ord',            q:'name="Ord River"',          minZoom:6, width:1.8 },
-  { name:'Victoria NT',    q:'name="Victoria River"',     minZoom:5, width:2.0 },
-  { name:'Bremer',         q:'name="Bremer River"',       minZoom:7, width:1.5 },
-  { name:'Torrens',        q:'name="Torrens River"',      minZoom:7, width:1.3 },
-  { name:'Mitchell',       q:'name="Mitchell River"',     minZoom:5, width:1.8 },
+const RIVERS = [
+  {name:"Murray",minZoom:4,width:3.0,color:"#4aa8ff",segments:[[[-36.03, 148.15], [-35.95, 147.8], [-35.85, 147.4], [-35.7, 146.9], [-35.55, 146.4], [-35.4, 145.9], [-35.25, 145.4], [-35.1, 144.9], [-34.95, 144.4], [-34.8, 143.9], [-34.65, 143.3], [-34.5, 142.8], [-34.35, 142.3], [-34.2, 141.9], [-34.1, 141.4], [-34.15, 140.8], [-34.5, 140.4], [-34.85, 139.95], [-35.1, 139.6], [-35.38, 139.35], [-35.55, 138.97]]]},
+  {name:"Darling",minZoom:4,width:2.6,color:"#4aa8ff",segments:[[[-29.1, 148.8], [-29.6, 148.2], [-30.1, 147.6], [-30.6, 147.0], [-31.1, 146.4], [-31.6, 145.8], [-32.1, 145.1], [-32.6, 144.4], [-33.1, 143.7], [-33.5, 143.0], [-33.85, 142.4], [-34.1, 141.9], [-34.25, 141.7], [-34.4, 141.5], [-34.5, 141.4]]]},
+  {name:"Murrumbidgee",minZoom:4,width:2.2,color:"#4aa8ff",segments:[[[-35.62, 149.1], [-35.45, 148.5], [-35.25, 147.9], [-35.1, 147.3], [-34.95, 146.6], [-34.8, 145.9], [-34.65, 145.2], [-34.45, 144.5], [-34.25, 143.8], [-34.1, 143.2], [-34.2, 142.6], [-34.5, 141.8], [-34.5, 141.4]]]},
+  {name:"Lachlan",minZoom:5,width:1.8,color:"#4aa8ff",segments:[[[-33.8, 149.4], [-33.7, 148.6], [-33.6, 147.8], [-33.55, 147.0], [-33.6, 146.2], [-33.65, 145.4], [-33.7, 144.6], [-33.8, 143.8], [-33.85, 143.2], [-33.8, 142.6], [-34.0, 142.0], [-34.3, 141.8]]]},
+  {name:"Macquarie",minZoom:5,width:1.8,color:"#4aa8ff",segments:[[[-33.25, 149.7], [-32.9, 149.2], [-32.6, 148.7], [-32.3, 148.2], [-32.0, 147.7], [-31.7, 147.2], [-31.4, 146.8], [-31.1, 146.4], [-30.8, 146.1], [-30.5, 145.8]]]},
+  {name:"Fitzroy QLD",minZoom:4,width:2.6,color:"#4aa8ff",segments:[[[-23.6, 147.2], [-23.5, 147.8], [-23.4, 148.4], [-23.35, 149.0], [-23.38, 149.6], [-23.4, 150.1], [-23.38, 150.51], [-23.3, 150.8], [-23.2, 150.92]]]},
+  {name:"Burdekin",minZoom:5,width:2.0,color:"#4aa8ff",segments:[[[-21.2, 145.5], [-20.8, 146.0], [-20.4, 146.4], [-20.0, 146.8], [-19.8, 147.0], [-19.6, 147.2], [-19.67, 147.37]]]},
+  {name:"Flinders",minZoom:4,width:2.2,color:"#4aa8ff",segments:[[[-20.8, 145.4], [-20.3, 144.6], [-19.8, 143.8], [-19.3, 143.0], [-18.8, 142.2], [-18.3, 141.6], [-17.8, 141.1], [-17.65, 140.82]]]},
+  {name:"Mitchell",minZoom:5,width:1.8,color:"#4aa8ff",segments:[[[-17.6, 144.8], [-17.2, 144.2], [-16.8, 143.6], [-16.4, 143.0], [-16.1, 142.4], [-15.8, 141.8], [-15.5, 141.3]]]},
+  {name:"Brisbane",minZoom:6,width:2.0,color:"#4aa8ff",segments:[[[-27.0, 152.35], [-27.1, 152.4], [-27.2, 152.45], [-27.3, 152.48], [-27.4, 152.52], [-27.46, 152.57], [-27.48, 152.68], [-27.5, 152.78], [-27.51, 152.88], [-27.48, 152.96], [-27.46, 153.03]]]},
+  {name:"Bremer",minZoom:7,width:1.5,color:"#4aa8ff",segments:[[[-27.95, 152.18], [-27.85, 152.28], [-27.76, 152.38], [-27.68, 152.48], [-27.64, 152.58], [-27.58, 152.68], [-27.54, 152.78], [-27.51, 152.88]]]},
+  {name:"Stanley",minZoom:8,width:1.2,color:"#4aa8ff",segments:[[[-26.38, 151.95], [-26.5, 152.05], [-26.62, 152.14], [-26.74, 152.22], [-26.85, 152.28], [-26.92, 152.31], [-26.97, 152.33]]]},
+  {name:"Clarence",minZoom:6,width:2.0,color:"#4aa8ff",segments:[[[-28.8, 152.0], [-29.0, 152.2], [-29.2, 152.45], [-29.4, 152.65], [-29.6, 152.8], [-29.68, 152.93], [-29.78, 153.1], [-29.85, 153.22]]]},
+  {name:"Hawkesbury",minZoom:6,width:2.0,color:"#4aa8ff",segments:[[[-34.0, 150.62], [-33.8, 150.68], [-33.6, 150.78], [-33.4, 150.88], [-33.2, 150.98], [-33.05, 151.1], [-32.9, 151.22]]]},
+  {name:"Hunter",minZoom:6,width:1.8,color:"#4aa8ff",segments:[[[-32.2, 150.55], [-32.35, 150.8], [-32.5, 151.05], [-32.65, 151.25], [-32.8, 151.45], [-32.92, 151.62], [-32.92, 151.76]]]},
+  {name:"Yarra",minZoom:6,width:1.8,color:"#4aa8ff",segments:[[[-37.52, 145.85], [-37.58, 145.6], [-37.64, 145.38], [-37.7, 145.18], [-37.76, 145.02], [-37.82, 144.95], [-37.84, 144.86]]]},
+  {name:"Goulburn VIC",minZoom:6,width:1.8,color:"#4aa8ff",segments:[[[-37.25, 146.45], [-37.05, 146.1], [-36.85, 145.75], [-36.6, 145.42], [-36.36, 145.4], [-36.1, 145.1], [-35.85, 144.85], [-35.6, 144.65], [-35.38, 144.5]]]},
+  {name:"Latrobe",minZoom:7,width:1.5,color:"#4aa8ff",segments:[[[-37.65, 146.05], [-37.8, 146.2], [-37.95, 146.32], [-38.1, 146.42], [-38.22, 146.42], [-38.32, 146.6], [-38.38, 146.82]]]},
+  {name:"Swan",minZoom:6,width:1.8,color:"#4aa8ff",segments:[[[-31.55, 116.72], [-31.68, 116.45], [-31.82, 116.18], [-31.92, 116.0], [-31.95, 115.88], [-31.98, 115.78], [-32.04, 115.74]]]},
+  {name:"Katherine",minZoom:6,width:2.0,color:"#4aa8ff",segments:[[[-15.0, 132.3], [-14.6, 132.2], [-14.2, 132.1], [-13.95, 132.1], [-13.72, 132.18], [-13.5, 131.9], [-13.3, 131.6], [-13.15, 131.25]]]},
+  {name:"Daly",minZoom:6,width:1.8,color:"#4aa8ff",segments:[[[-13.9, 131.4], [-13.65, 131.1], [-13.42, 130.8], [-13.22, 130.4], [-13.08, 130.08]]]},
+  {name:"Victoria NT",minZoom:5,width:2.0,color:"#4aa8ff",segments:[[[-16.3, 131.5], [-15.9, 131.1], [-15.5, 130.7], [-15.1, 130.3], [-14.7, 129.85]]]},
+  {name:"Roper",minZoom:6,width:1.8,color:"#4aa8ff",segments:[[[-14.6, 133.4], [-14.65, 133.8], [-14.7, 134.2], [-14.72, 134.6], [-14.7, 135.0], [-14.62, 135.4]]]},
+  {name:"Gascoyne",minZoom:6,width:1.8,color:"#4aa8ff",segments:[[[-25.2, 116.8], [-25.0, 116.2], [-24.8, 115.6], [-24.65, 115.0], [-24.88, 114.6], [-24.88, 113.66]]]},
+  {name:"Murchison",minZoom:6,width:1.8,color:"#4aa8ff",segments:[[[-27.2, 117.8], [-26.9, 117.2], [-26.6, 116.6], [-26.3, 116.0], [-26.0, 115.4], [-26.1, 114.9], [-27.37, 114.62]]]},
+  {name:"Ord",minZoom:6,width:1.8,color:"#4aa8ff",segments:[[[-17.2, 128.6], [-16.9, 128.8], [-16.6, 128.8], [-16.3, 128.7], [-15.9, 128.6], [-15.5, 128.55]]]},
+  {name:"Fitzroy WA",minZoom:6,width:2.0,color:"#4aa8ff",segments:[[[-18.6, 126.2], [-18.3, 125.4], [-18.0, 124.6], [-17.8, 123.8], [-17.6, 123.2], [-17.55, 123.0]]]},
+  {name:"Torrens",minZoom:7,width:1.3,color:"#4aa8ff",segments:[[[-34.75, 139.1], [-34.85, 138.85], [-34.93, 138.62], [-34.95, 138.5]]]},
+  {name:"De Grey",minZoom:7,width:1.5,color:"#4aa8ff",segments:[[[-21.1, 120.2], [-20.8, 119.6], [-20.5, 119.0], [-20.31, 118.58], [-20.4, 118.2]]]},
+  {name:"Barwon",minZoom:5,width:2.0,color:"#4aa8ff",segments:[[[-29.1, 148.8], [-29.2, 148.5], [-29.5, 148.2], [-29.68, 148.01], [-30.0, 147.6], [-30.4, 147.2], [-30.8, 146.8]]]},
+  {name:"Namoi",minZoom:6,width:1.6,color:"#4aa8ff",segments:[[[-30.8, 150.6], [-30.6, 150.0], [-30.4, 149.4], [-30.2, 148.8], [-30.0, 148.2], [-29.8, 147.6], [-29.68, 148.01]]]},
 ];
 
-// Loaded river data: { name, minZoom, width, color, coords[] }
-let RIVERS = [];
 let riverSVGLayers = [];
 let riverParticles = [];
 
-// ── Fetch river geometry from Overpass ──
-async function loadRiverData() {
-  // Build a single Overpass query for all rivers in Australia bounding box
-  const bbox = '-38.5,112.0,-10.0,154.0';
-  const queries = RIVER_DEFS.map(r =>
-    `way[waterway=river][${r.q}](${bbox});`
-  ).join('
-');
+// Custom pane created after map init — see below
 
-  const overpassQuery = `[out:json][timeout:30];
-(
-${queries}
-);
-out geom qt;`;
-
-  try {
-    const resp = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      body: 'data=' + encodeURIComponent(overpassQuery)
-    });
-    const data = await resp.json();
-
-    // Group ways by name into rivers
-    const byName = {};
-    data.elements.forEach(el => {
-      if (el.type !== 'way' || !el.geometry) return;
-      const name = el.tags?.name;
-      if (!name) return;
-      const def = RIVER_DEFS.find(r => name.includes(r.name.split(' ')[0]) ||
-        el.tags?.name === r.q.match(/"([^"]+)"/)?.[1]);
-      if (!def) return;
-      if (!byName[def.name]) byName[def.name] = { def, ways: [] };
-      byName[def.name].ways.push(el.geometry.map(n => [n.lat, n.lon]));
-    });
-
-    // Build RIVERS array from fetched data
-    RIVERS = Object.entries(byName).map(([name, { def, ways }]) => ({
-      name,
-      minZoom: def.minZoom,
-      width: def.width,
-      color: '#4aa8ff',
-      // Each river can have multiple way segments
-      segments: ways,
-    }));
-
-    console.log(`Loaded ${RIVERS.length} rivers from OSM`);
-    buildRiverSVG();
-    rebuildParticles();
-
-  } catch(e) {
-    console.warn('Overpass fetch failed, using fallback:', e);
-    loadFallbackRivers();
-  }
-}
-
-// ── Fallback: simple reliable coords if Overpass fails ──
-function loadFallbackRivers() {
-  RIVERS = [
-    { name:'Murray',      minZoom:4, width:3.0, color:'#4aa8ff', segments:[[[-36.12,147.60],[-35.80,146.40],[-35.50,145.00],[-35.20,143.80],[-34.80,142.60],[-34.50,141.40],[-34.20,140.80],[-35.00,139.80],[-35.38,139.35],[-35.55,138.97]]] },
-    { name:'Darling',     minZoom:4, width:2.6, color:'#4aa8ff', segments:[[[-29.10,148.50],[-30.00,147.20],[-31.00,146.00],[-32.00,144.60],[-33.00,143.20],[-33.80,142.20],[-34.20,141.40],[-34.50,141.00]]] },
-    { name:'Murrumbidgee',minZoom:4, width:2.2, color:'#4aa8ff', segments:[[[-35.60,149.00],[-35.30,147.80],[-35.00,146.20],[-34.70,144.80],[-34.30,143.60],[-34.00,143.00]]] },
-    { name:'Fitzroy',     minZoom:4, width:2.6, color:'#4aa8ff', segments:[[[-23.80,147.60],[-23.50,149.00],[-23.38,150.51],[-23.20,150.80]]] },
-    { name:'Flinders',    minZoom:4, width:2.2, color:'#4aa8ff', segments:[[[-20.80,145.20],[-19.80,143.20],[-18.60,141.60],[-17.65,140.80]]] },
-    { name:'Brisbane',    minZoom:6, width:2.0, color:'#4aa8ff', segments:[[[-27.10,152.35],[-27.25,152.40],[-27.40,152.52],[-27.46,152.65],[-27.50,152.88],[-27.47,153.02]]] },
-    { name:'Yarra',       minZoom:6, width:1.8, color:'#4aa8ff', segments:[[[-37.55,145.75],[-37.68,145.38],[-37.78,145.05],[-37.82,144.95],[-37.84,144.86]]] },
-    { name:'Swan',        minZoom:6, width:1.8, color:'#4aa8ff', segments:[[[-31.55,116.70],[-31.80,116.10],[-31.95,115.88],[-32.05,115.76]]] },
-    { name:'Katherine',   minZoom:6, width:2.0, color:'#4aa8ff', segments:[[[-14.90,132.20],[-14.30,132.00],[-13.90,131.90],[-13.50,131.50]]] },
-  ];
-  buildRiverSVG();
-  rebuildParticles();
-}
-
-// ── SVG river lines ──
 function buildRiverSVG() {
   riverSVGLayers.forEach(l => map.removeLayer(l));
   riverSVGLayers.length = 0;
   const zoom = map.getZoom();
-
   RIVERS.forEach(r => {
     if (zoom < r.minZoom) return;
-    const alpha = Math.min(0.6, 0.15 + (zoom - r.minZoom) * 0.12);
-    const w = r.width * Math.max(0.5, Math.min(2.0, (zoom - 2) / 5));
-
+    const alpha = Math.min(0.6, 0.12 + (zoom - r.minZoom) * 0.10);
+    const w = r.width * Math.max(0.4, Math.min(2.2, (zoom - 2) / 5));
     r.segments.forEach(seg => {
       if (seg.length < 2) return;
       const pl = L.polyline(seg, {
         color: r.color, weight: w, opacity: alpha,
-        smoothFactor: 2, className: 'river-svg-line',
-        pane: 'riverPane'
+        smoothFactor: 2, className: "river-svg-line", pane: "riverPane"
       }).addTo(map);
       riverSVGLayers.push(pl);
     });
   });
 }
 
-// ── Canvas for animated particles ──
-// Canvas sits INSIDE the map container, absolutely positioned
-const riverCanvas = document.createElement('canvas');
-riverCanvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:450;';
-document.getElementById('map').appendChild(riverCanvas);
-const riverCtx = riverCanvas.getContext('2d');
+// Canvas — position:absolute inside #map so coords match latLngToContainerPoint
+const riverCanvas = document.createElement("canvas");
+riverCanvas.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:450;";
+document.getElementById("map").appendChild(riverCanvas);
+const riverCtx = riverCanvas.getContext("2d");
 
 function resizeRiverCanvas() {
-  const mapEl = document.getElementById('map');
-  riverCanvas.width  = mapEl.offsetWidth;
-  riverCanvas.height = mapEl.offsetHeight;
+  const el = document.getElementById("map");
+  riverCanvas.width  = el.offsetWidth;
+  riverCanvas.height = el.offsetHeight;
 }
 resizeRiverCanvas();
-window.addEventListener('resize', resizeRiverCanvas);
-map.on('resize', resizeRiverCanvas);
+window.addEventListener("resize", resizeRiverCanvas);
+map.on("resize", resizeRiverCanvas);
 
 function rebuildParticles() {
   riverParticles = [];
@@ -841,11 +767,14 @@ function rebuildParticles() {
   RIVERS.forEach((r, ri) => {
     if (zoom < r.minZoom) return;
     r.segments.forEach((seg, si) => {
-      const count = Math.max(2, Math.round(seg.length * (zoom - r.minZoom + 1.5)));
-      for (let i = 0; i < count; i++) {
-        riverParticles.push({ ri, si, t: Math.random(),
-          speed: (0.0008 + Math.random() * 0.0006) / Math.max(2, seg.length * 0.4),
-          size: r.width * 0.65, alpha: 0.55 + Math.random() * 0.35 });
+      const n = Math.max(2, Math.round(seg.length * Math.max(1, zoom - r.minZoom + 1)));
+      for (let i = 0; i < n; i++) {
+        riverParticles.push({
+          ri, si, t: Math.random(),
+          speed: (0.0007 + Math.random() * 0.0006) / Math.max(2, seg.length * 0.35),
+          size: r.width * 0.65,
+          alpha: 0.55 + Math.random() * 0.35
+        });
       }
     });
   });
@@ -853,8 +782,8 @@ function rebuildParticles() {
 
 function toScreenPts(seg) {
   return seg.map(c => {
-    const pt = map.latLngToContainerPoint(L.latLng(c[0], c[1]));
-    return { x: pt.x, y: pt.y };
+    const p = map.latLngToContainerPoint(L.latLng(c[0], c[1]));
+    return {x: p.x, y: p.y};
   });
 }
 
@@ -863,38 +792,36 @@ function ptAtT(pts, t) {
   const lens = [];
   for (let i = 1; i < pts.length; i++) {
     const dx = pts[i].x-pts[i-1].x, dy = pts[i].y-pts[i-1].y;
-    const l = Math.sqrt(dx*dx+dy*dy); lens.push(l); total += l;
+    const l = Math.sqrt(dx*dx+dy*dy);
+    lens.push(l); total += l;
   }
   let target = t * total, walked = 0;
   for (let i = 0; i < lens.length; i++) {
     if (walked + lens[i] >= target) {
-      const f = (target-walked)/lens[i];
+      const f = (target - walked) / lens[i];
       const dx = pts[i+1].x-pts[i].x, dy = pts[i+1].y-pts[i].y;
-      return { x: pts[i].x+dx*f, y: pts[i].y+dy*f, angle: Math.atan2(dy,dx) };
+      return {x: pts[i].x+dx*f, y: pts[i].y+dy*f, angle: Math.atan2(dy,dx)};
     }
     walked += lens[i];
   }
-  return { ...pts[pts.length-1], angle: 0 };
+  const last = pts[pts.length-1];
+  return {x: last.x, y: last.y, angle: 0};
 }
 
 function tickRiverParticles() {
   const W = riverCanvas.width, H = riverCanvas.height;
   riverCtx.clearRect(0, 0, W, H);
   const zoom = map.getZoom();
-
   riverParticles.forEach(p => {
     const r = RIVERS[p.ri];
     if (!r || zoom < r.minZoom) return;
     const seg = r.segments[p.si];
     if (!seg) return;
-
     p.t += p.speed;
     if (p.t >= 1) p.t = 0;
-
     const pts = toScreenPts(seg);
     const pos = ptAtT(pts, p.t);
     if (pos.x < -20 || pos.x > W+20 || pos.y < -20 || pos.y > H+20) return;
-
     const fade = Math.min(1, (zoom - r.minZoom + 1) / 2);
     riverCtx.save();
     riverCtx.globalAlpha = p.alpha * fade;
@@ -908,26 +835,20 @@ function tickRiverParticles() {
     riverCtx.fill();
     riverCtx.restore();
   });
-
   requestAnimationFrame(tickRiverParticles);
 }
 
-// Build SVG + particles on zoom change
-map.on('zoomend', () => { buildRiverSVG(); rebuildParticles(); });
-
-// Start animation loop immediately
+map.on("zoomend", () => { buildRiverSVG(); rebuildParticles(); });
+buildRiverSVG();
+rebuildParticles();
 requestAnimationFrame(tickRiverParticles);
 
-// Load real OSM river data
-loadRiverData();
-
-// Update river colours from gauge risk
 function updateRiverColors(nameColorMap) {
   RIVERS.forEach(r => {
-    const match = Object.keys(nameColorMap).find(k =>
-      r.name.toLowerCase().includes(k.toLowerCase().split(' ')[0])
+    const key = Object.keys(nameColorMap).find(k =>
+      r.name.toLowerCase().startsWith(k.toLowerCase().split(" ")[0])
     );
-    r.color = match ? nameColorMap[match] : '#4aa8ff';
+    r.color = key ? nameColorMap[key] : "#4aa8ff";
   });
   buildRiverSVG();
 }
