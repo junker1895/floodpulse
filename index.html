@@ -724,6 +724,9 @@ const riverTileLayer = L.tileLayer(GEOFABRIC_URL, {
   pane: 'riverPane',
   attribution: 'Rivers: Geoscience Australia Geofabric v3',
   crossOrigin: true,
+  updateWhenIdle: true,      // only load tiles when map stops moving
+  updateWhenZooming: false,  // don't reload mid-zoom
+  keepBuffer: 1,
 });
 riverTileLayer.addTo(map);
 riverTileLayer.once('load', () => fadeRiverTiles(0.75));
@@ -779,56 +782,66 @@ resizeRiverCanvas();
 window.addEventListener('resize', resizeRiverCanvas);
 map.on('resize', resizeRiverCanvas);
 
-// Load rivers.geojson once, then filter by viewport on every move
-async function loadRiversGeoJSON() {
+async function loadLOD(lod) {
+  if (riverCache[lod]) return riverCache[lod];
   try {
-    const resp = await fetch(RIVERS_GEOJSON);
-    if (!resp.ok) throw new Error('rivers.geojson not found — run fetch_rivers.py first');
+    const url = RIVERS_LOD[lod];
+    console.log('Loading river LOD:', lod);
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(url + ' not found — run fetch_rivers.py first');
     const data = await resp.json();
-    allRiverFeatures = data.features || [];
-    console.log('Loaded', allRiverFeatures.length, 'river segments from rivers.geojson');
-    fetchRiverSegments();
+    riverCache[lod] = data.features || [];
+    console.log('Cached', riverCache[lod].length, 'segments for LOD:', lod);
+    return riverCache[lod];
   } catch (e) {
-    console.warn('River data unavailable:', e.message);
+    console.warn('River LOD unavailable:', e.message);
+    return [];
   }
 }
 
-function fetchRiverSegments() {
-  if (map.getZoom() < 7 || allRiverFeatures.length === 0) {
+async function fetchRiverSegments() {
+  const zoom = map.getZoom();
+  if (zoom < 5) {
     riverSegments = [];
     riverParticles = [];
     return;
   }
 
-  const b = map.getBounds();
-  const w = b.getWest(), s = b.getSouth(), e = b.getEast(), n = b.getNorth();
+  const lod      = zoom >= LOD_BREAKPOINT ? 'detail' : 'overview';
+  const features = await loadLOD(lod);
+  if (!features.length) return;
+
+  currentLOD = lod;
+
+  const b   = map.getBounds();
+  const w   = b.getWest(), s = b.getSouth(), e = b.getEast(), n = b.getNorth();
+  const pad = 0.5;
 
   riverSegments = [];
-
-  allRiverFeatures.forEach(f => {
+  features.forEach(f => {
     const props = f.properties || {};
     const geom  = f.geometry;
     if (!geom) return;
 
     const name    = props.name || '';
     const flowdir = props.flowdir || 1;
-    const area    = props.upstrdarea || 0;
-    const width   = Math.min(5, Math.max(1.5, Math.log10(Math.max(1, area / 1e8)) + 2.5));
+    const area    = props.area   || 0;   // stored as km² by fetch_rivers.py
+    const width   = Math.min(5, Math.max(2, Math.log10(Math.max(1, area)) * 0.8 + 1));
     const color   = matchRiverColor(name);
 
     const lines = geom.type === 'MultiLineString' ? geom.coordinates : [geom.coordinates];
     lines.forEach(coords => {
       if (coords.length < 2) return;
-
-      // Viewport cull — check if any point is within bounds
-      const inView = coords.some(c => c[0] >= w && c[0] <= e && c[1] >= s && c[1] <= n);
+      const inView = coords.some(c =>
+        c[0] >= w-pad && c[0] <= e+pad && c[1] >= s-pad && c[1] <= n+pad
+      );
       if (!inView) return;
-
       const pts = flowdir === 2 ? [...coords].reverse() : coords;
       riverSegments.push({ pts, name, color, width });
     });
   });
 
+  console.log('River segments in viewport:', riverSegments.length);
   rebuildParticles();
 }
 
