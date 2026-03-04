@@ -122,12 +122,14 @@ nav {
 #map { flex:1; position:relative; z-index:1; }
 
 /* ── MAP TILES ── */
-.leaflet-tile { filter:brightness(0.28) saturate(0.35) hue-rotate(195deg); }
-.river-svg-line { filter:none !important; }
-.leaflet-overlay-pane svg path.river-svg-line { filter:none !important; }
-#map > canvas { filter:none !important; }
-.leaflet-overlay-pane .leaflet-tile,
+/* Dark filter only on base map tiles, NOT overlay pane tiles (radar) */
+.leaflet-tile-pane .leaflet-tile { filter:brightness(0.28) saturate(0.35) hue-rotate(195deg); }
+/* Radar overlay tiles keep full colour */
+.leaflet-overlay-pane .leaflet-tile { filter:none !important; }
 .leaflet-pane.leaflet-overlay-pane img { filter:none !important; }
+/* River lines and canvas never darkened */
+.river-svg-line { filter:none !important; }
+#map > canvas { filter:none !important; }
 .leaflet-container { background:#040810; }
 .leaflet-control-zoom { display:none; }
 #rainCanvas { position:absolute; inset:0; pointer-events:none; z-index:400; transition:opacity .4s; }
