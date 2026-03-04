@@ -141,6 +141,12 @@ nav {
   /* On mobile, map fills full screen behind bottom sheet */
 }
 .leaflet-tile { filter: brightness(0.30) saturate(0.4) hue-rotate(190deg); }
+
+/* Radar tiles must NOT get the dark filter — keep their vivid colours */
+.leaflet-overlay-pane .leaflet-tile,
+.leaflet-pane.leaflet-overlay-pane img {
+  filter: none !important;
+}
 .leaflet-container { background: #07101e; }
 .leaflet-control-zoom { display:none; }
 
@@ -1252,7 +1258,7 @@ function initRadarFrames(api) {
   // Pre-create tile layers (but don't add to map yet)
   mapFrames.forEach(frame => {
     const url = `${api.host}${frame.path}/${RADAR_SIZE}/{z}/{x}/{y}/${RADAR_COLOR}/${RADAR_SMOOTH}_${RADAR_SNOW}.${RADAR_EXT}`;
-    radarLayers.push(L.tileLayer(url, { opacity: 0, zIndex: 500, attribution: 'RainViewer' }));
+    radarLayers.push(L.tileLayer(url, { opacity: 0, zIndex: 500, attribution: 'RainViewer', pane: 'overlayPane' }));
   });
 
   // Show latest frame
