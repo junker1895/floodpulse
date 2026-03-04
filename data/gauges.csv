@@ -1,0 +1,4 @@
+gauge_id,name,state,river_name,lat,lon,provider,external_id,is_active
+g-bris-1,Brisbane City Gauge,QLD,Brisbane River,-27.4705,153.0260,mock,bris_1,true
+g-ips-1,Ipswich Gauge,QLD,Bremer River,-27.6140,152.7600,mock,ips_1,true
+g-mogg-1,Moggill Gauge,QLD,Brisbane River,-27.5830,152.8760,mock,mog_1,true

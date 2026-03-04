@@ -1,0 +1,5 @@
+[
+  {"gauge_id":"g-bris-1","var":"level_m","base_value":2.4,"amplitude":0.15,"drift":0.08,"phase":0.1,"units":"m"},
+  {"gauge_id":"g-ips-1","var":"level_m","base_value":1.9,"amplitude":0.13,"drift":0.05,"phase":1.0,"units":"m"},
+  {"gauge_id":"g-mogg-1","var":"level_m","base_value":2.1,"amplitude":0.17,"drift":0.07,"phase":2.4,"units":"m"}
+]
