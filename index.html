@@ -833,25 +833,30 @@ function buildScreenCache() {
   );
 }
 
+const MAX_PARTICLES = 600;
+
 function rebuildParticles() {
   riverParticles = [];
   if (!particleVisible) return;
   buildScreenCache();
-  riverSegments.forEach((seg, si) => {
+
+  // Sort segments by area descending — prioritise major rivers
+  const indexed = riverSegments
+    .map((seg, si) => ({ si, seg }))
+    .sort((a, b) => (b.seg.pts.length - a.seg.pts.length));
+
+  for (const { si, seg } of indexed) {
+    if (riverParticles.length >= MAX_PARTICLES) break;
     const sPts = screenPtsCache[si];
-    if (!sPts || sPts.length < 2) return;
-    // 1 particle per segment — enough to show flow on every river
-    const n = Math.max(1, Math.min(4, Math.round(seg.pts.length * 0.4)));
-    for (let i = 0; i < n; i++) {
-      riverParticles.push({
-        si,
-        t: Math.random(),
-        speed: 0.0012 + Math.random() * 0.0008,
-        size: Math.max(3, seg.width * 1.2),
-        alpha: 0.7 + Math.random() * 0.3,
-      });
-    }
-  });
+    if (!sPts || sPts.length < 2) continue;
+    riverParticles.push({
+      si,
+      t: Math.random(),
+      speed: 0.0010 + Math.random() * 0.0006,
+      size: Math.max(2.5, seg.width),
+      alpha: 0.75 + Math.random() * 0.2,
+    });
+  }
 }
 
 // Rebuild screen cache on pan (coords shift) without full particle rebuild
@@ -896,12 +901,11 @@ function tickRiverParticles() {
     riverCtx.save();
     riverCtx.globalAlpha = p.alpha;
     riverCtx.fillStyle = color;
-    riverCtx.shadowColor = color;
-    riverCtx.shadowBlur = p.size * 3;
+    // No shadowBlur — too expensive with many particles
     riverCtx.translate(pos.x, pos.y);
     riverCtx.rotate(pos.angle);
     riverCtx.beginPath();
-    riverCtx.ellipse(0, 0, p.size * 2, p.size * 0.6, 0, 0, Math.PI * 2);
+    riverCtx.ellipse(0, 0, p.size * 2, p.size * 0.65, 0, 0, Math.PI * 2);
     riverCtx.fill();
     riverCtx.restore();
   });
