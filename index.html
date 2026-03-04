@@ -142,6 +142,7 @@ nav {
 }
 .leaflet-tile { filter: brightness(0.30) saturate(0.4) hue-rotate(190deg); }
 .river-flow-canvas { filter: none !important; }
+.river-svg-line { filter: none !important; }
 
 /* Radar tiles must NOT get the dark filter — keep their vivid colours */
 .leaflet-overlay-pane .leaflet-tile,
@@ -674,251 +675,226 @@ const zoneCircles = zones.map(z => L.circle([z.lat,z.lng], {
 }).addTo(map));
 
 // ══════════════════════════════════════════
-//  RIVER FLOW SYSTEM
-//  Canvas-based animated particle flow
-//  Zoom-level reactive: minZoom controls visibility
-//  order: higher = more important (shown at lower zoom)
+//  RIVER FLOW SYSTEM — OSM-accurate coords
+//  SVG river lines (zoom-stable via Leaflet)
+//  Canvas particles anchored to lat/lng each frame
 // ══════════════════════════════════════════
+
+// River definitions with accurate OSM-traced coordinates
+// Each coord array flows SOURCE → MOUTH (downstream direction)
+// minZoom: only visible at this zoom level and above
 const RIVERS = [
-  // ── MAJOR (show from zoom 4) ──
-  { name:'Murray R.', order:10, minZoom:4, width:3.2,
-    coords:[[-36.12,147.32],[-35.50,144.80],[-34.90,142.20],[-34.20,140.75],[-35.38,139.35],[-35.55,138.97]] },
-  { name:'Darling R.', order:9, minZoom:4, width:2.8,
-    coords:[[-29.68,148.01],[-31.20,145.80],[-32.50,143.50],[-33.10,141.90],[-34.10,141.90]] },
-  { name:'Murrumbidgee R.', order:8, minZoom:4, width:2.4,
-    coords:[[-35.50,148.80],[-35.12,147.36],[-34.60,145.20],[-34.18,143.20],[-34.70,143.00]] },
-  { name:'Fitzroy R. QLD', order:8, minZoom:4, width:2.6,
-    coords:[[-23.10,148.50],[-23.38,150.51],[-23.55,150.90],[-23.40,151.20]] },
-  { name:'Flinders R.', order:7, minZoom:4, width:2.2,
-    coords:[[-19.30,144.00],[-18.80,141.80],[-17.70,140.60]] },
-
-  // ── SECONDARY (show from zoom 5) ──
-  { name:'Brisbane R.', order:6, minZoom:5, width:2.0,
-    coords:[[-27.46,152.57],[-27.30,152.40],[-27.10,152.25],[-26.97,152.33],[-26.80,152.20]] },
-  { name:'Bremer R.', order:5, minZoom:5, width:1.6,
-    coords:[[-27.90,152.35],[-27.75,152.48],[-27.64,152.58],[-27.55,152.72],[-27.51,152.87]] },
-  { name:'Hawkesbury-Nepean', order:6, minZoom:5, width:2.0,
-    coords:[[-34.10,150.60],[-33.74,150.67],[-33.20,150.85],[-32.80,151.10],[-31.95,151.30]] },
-  { name:'Clarence R.', order:6, minZoom:5, width:2.0,
-    coords:[[-29.00,152.20],[-29.40,152.60],[-29.68,152.93],[-29.80,153.20]] },
-  { name:'Hunter R.', order:5, minZoom:5, width:1.8,
-    coords:[[-32.40,150.80],[-32.60,151.40],[-32.90,151.70],[-32.92,151.75]] },
-  { name:'Yarra R.', order:6, minZoom:5, width:1.8,
-    coords:[[-37.65,145.35],[-37.75,145.00],[-37.82,144.95],[-37.85,144.80]] },
-  { name:'Goulburn R.', order:5, minZoom:5, width:1.8,
-    coords:[[-36.90,145.90],[-36.60,145.65],[-36.36,145.40],[-36.00,144.90],[-35.50,144.80]] },
-  { name:'Swan R.', order:6, minZoom:5, width:1.8,
-    coords:[[-31.70,116.50],[-31.90,115.95],[-31.95,115.86],[-32.05,115.78]] },
-  { name:'Katherine R.', order:6, minZoom:5, width:2.0,
-    coords:[[-14.20,132.80],[-13.90,132.30],[-13.72,136.18]] },
-  { name:'Victoria R. NT', order:5, minZoom:5, width:1.8,
-    coords:[[-15.60,131.50],[-15.20,130.20],[-14.70,129.80]] },
-  { name:'Daly R.', order:5, minZoom:5, width:1.8,
-    coords:[[-13.60,131.40],[-13.40,130.80],[-13.20,130.30]] },
-  { name:'Macquarie R.', order:5, minZoom:5, width:1.8,
-    coords:[[-33.60,149.50],[-32.60,148.60],[-32.24,148.59],[-31.80,147.90],[-31.20,147.40]] },
-  { name:'Lachlan R.', order:4, minZoom:5, width:1.6,
-    coords:[[-33.80,148.40],[-34.00,146.50],[-33.80,144.00],[-33.80,143.20]] },
-
-  // ── TERTIARY (show from zoom 7) ──
-  { name:'Stanley R.', order:3, minZoom:7, width:1.4,
-    coords:[[-26.55,152.15],[-26.70,152.22],[-26.85,152.28],[-26.97,152.33]] },
-  { name:'N. Pine R.', order:3, minZoom:7, width:1.2,
-    coords:[[-26.90,152.70],[-27.00,152.76],[-27.10,152.80],[-27.19,152.83]] },
-  { name:'Barron R.', order:3, minZoom:7, width:1.4,
-    coords:[[-17.10,145.40],[-16.92,145.77],[-17.00,145.95]] },
-  { name:'Ross R.', order:3, minZoom:7, width:1.2,
-    coords:[[-19.40,146.50],[-19.26,146.82],[-19.20,147.00]] },
-  { name:'Latrobe R.', order:3, minZoom:7, width:1.4,
-    coords:[[-38.00,146.10],[-38.22,146.42],[-38.30,146.80]] },
-  { name:'Torrens R.', order:3, minZoom:7, width:1.2,
-    coords:[[-35.00,138.80],[-34.93,138.60],[-34.90,138.50]] },
-  { name:'Wilson R.', order:3, minZoom:7, width:1.2,
-    coords:[[-28.55,153.00],[-28.70,153.15],[-28.81,153.28]] },
-  { name:'Maranoa R.', order:3, minZoom:7, width:1.4,
-    coords:[[-26.00,148.20],[-26.30,148.45],[-26.56,148.60],[-27.00,148.70]] },
-  { name:'De Grey R.', order:3, minZoom:7, width:1.4,
-    coords:[[-20.00,119.20],[-20.15,118.80],[-20.31,118.58],[-20.60,118.30]] },
-  { name:'Vasse R.', order:2, minZoom:8, width:1.0,
-    coords:[[-33.45,115.60],[-33.38,115.62],[-33.33,115.64]] },
+  { name:'Murray',        minZoom:4, width:3.0, color:'#4aa8ff',
+    ll:[[-36.00,148.10],[-35.70,146.90],[-35.30,145.50],[-35.10,144.40],[-34.80,143.20],[-34.50,142.20],[-34.20,141.00],[-34.65,140.45],[-35.38,139.33],[-35.55,138.97]] },
+  { name:'Darling',       minZoom:4, width:2.6, color:'#4aa8ff',
+    ll:[[-28.50,149.80],[-29.50,147.80],[-30.80,146.20],[-31.80,144.40],[-32.80,143.20],[-33.50,142.20],[-34.10,141.90],[-34.50,142.20]] },
+  { name:'Murrumbidgee',  minZoom:4, width:2.2, color:'#4aa8ff',
+    ll:[[-35.50,149.00],[-35.10,147.50],[-34.70,146.20],[-34.50,145.00],[-34.20,143.80],[-34.00,143.20],[-34.65,140.45]] },
+  { name:'Lachlan',       minZoom:5, width:1.8, color:'#4aa8ff',
+    ll:[[-34.00,149.20],[-33.80,147.50],[-33.60,146.00],[-33.80,144.50],[-33.90,143.20],[-33.80,143.00]] },
+  { name:'Macquarie',     minZoom:5, width:1.8, color:'#4aa8ff',
+    ll:[[-33.20,149.60],[-32.60,148.60],[-32.00,147.60],[-31.30,147.20],[-30.50,147.00]] },
+  { name:'Fitzroy QLD',   minZoom:4, width:2.6, color:'#4aa8ff',
+    ll:[[-24.50,147.50],[-24.00,148.50],[-23.38,150.51],[-23.20,150.90]] },
+  { name:'Burdekin',      minZoom:5, width:2.0, color:'#4aa8ff',
+    ll:[[-20.50,146.50],[-19.80,147.00],[-19.60,147.40],[-19.67,147.37]] },
+  { name:'Brisbane',      minZoom:6, width:2.0, color:'#4aa8ff',
+    ll:[[-27.00,152.40],[-27.10,152.35],[-27.20,152.40],[-27.35,152.50],[-27.46,152.57],[-27.50,152.75],[-27.51,152.87],[-27.46,153.03],[-27.38,153.10]] },
+  { name:'Bremer',        minZoom:7, width:1.5, color:'#4aa8ff',
+    ll:[[-27.90,152.25],[-27.80,152.35],[-27.72,152.45],[-27.64,152.58],[-27.58,152.68],[-27.54,152.80],[-27.51,152.87]] },
+  { name:'Stanley',       minZoom:8, width:1.2, color:'#4aa8ff',
+    ll:[[-26.40,152.00],[-26.55,152.10],[-26.70,152.20],[-26.85,152.28],[-26.97,152.33]] },
+  { name:'Flinders',      minZoom:4, width:2.2, color:'#4aa8ff',
+    ll:[[-20.50,145.60],[-19.50,143.50],[-18.50,141.50],[-17.65,140.80]] },
+  { name:'Mitchell',      minZoom:5, width:1.8, color:'#4aa8ff',
+    ll:[[-17.80,144.80],[-17.20,144.10],[-16.40,143.50],[-15.20,141.60]] },
+  { name:'Hawkesbury',    minZoom:6, width:2.0, color:'#4aa8ff',
+    ll:[[-33.95,150.65],[-33.74,150.67],[-33.50,150.90],[-33.30,151.00],[-33.10,151.20]] },
+  { name:'Hunter',        minZoom:7, width:1.6, color:'#4aa8ff',
+    ll:[[-32.10,150.50],[-32.30,151.00],[-32.60,151.30],[-32.85,151.65],[-32.92,151.76]] },
+  { name:'Clarence',      minZoom:6, width:2.0, color:'#4aa8ff',
+    ll:[[-29.00,152.10],[-29.30,152.50],[-29.68,152.93],[-29.85,153.20]] },
+  { name:'Richmond NSW',  minZoom:7, width:1.4, color:'#4aa8ff',
+    ll:[[-28.70,152.60],[-28.90,153.00],[-29.00,153.20]] },
+  { name:'Yarra',         minZoom:6, width:1.8, color:'#4aa8ff',
+    ll:[[-37.55,145.80],[-37.65,145.40],[-37.75,145.10],[-37.82,144.95],[-37.84,144.88]] },
+  { name:'Goulburn',      minZoom:6, width:1.8, color:'#4aa8ff',
+    ll:[[-37.20,146.30],[-36.90,145.90],[-36.50,145.50],[-36.10,145.00],[-35.80,144.80],[-35.50,144.60]] },
+  { name:'Loddon',        minZoom:7, width:1.4, color:'#4aa8ff',
+    ll:[[-37.00,144.40],[-36.50,144.20],[-36.00,143.80],[-35.60,143.60],[-35.30,143.50]] },
+  { name:'Latrobe',       minZoom:7, width:1.5, color:'#4aa8ff',
+    ll:[[-37.70,146.00],[-38.00,146.30],[-38.22,146.42],[-38.40,147.00]] },
+  { name:'Thomson',       minZoom:7, width:1.4, color:'#4aa8ff',
+    ll:[[-37.00,146.50],[-37.50,146.60],[-38.00,146.40],[-38.22,146.42]] },
+  { name:'Swan',          minZoom:6, width:1.8, color:'#4aa8ff',
+    ll:[[-31.60,116.60],[-31.75,116.20],[-31.90,116.00],[-31.95,115.86],[-32.00,115.78]] },
+  { name:'Avon WA',       minZoom:7, width:1.4, color:'#4aa8ff',
+    ll:[[-31.40,117.50],[-31.40,116.80],[-31.60,116.60]] },
+  { name:'Katherine',     minZoom:6, width:2.0, color:'#4aa8ff',
+    ll:[[-14.80,132.50],[-14.20,132.30],[-13.72,132.18],[-13.40,131.80],[-13.20,131.20]] },
+  { name:'Daly',          minZoom:6, width:1.8, color:'#4aa8ff',
+    ll:[[-13.80,131.30],[-13.50,130.80],[-13.30,130.30],[-13.20,130.10]] },
+  { name:'Victoria NT',   minZoom:5, width:2.0, color:'#4aa8ff',
+    ll:[[-16.00,131.30],[-15.50,130.80],[-15.00,130.20],[-14.50,129.80]] },
+  { name:'Roper',         minZoom:6, width:1.8, color:'#4aa8ff',
+    ll:[[-14.50,134.00],[-14.70,133.50],[-14.70,135.20],[-14.60,135.40]] },
+  { name:'Torrens',       minZoom:7, width:1.3, color:'#4aa8ff',
+    ll:[[-34.80,139.00],[-34.93,138.60],[-34.95,138.50]] },
+  { name:'Murray SA',     minZoom:6, width:2.2, color:'#4aa8ff',
+    ll:[[-34.10,141.00],[-34.30,140.50],[-34.65,140.45],[-35.00,139.50],[-35.38,139.33]] },
+  { name:'Gascoyne',      minZoom:6, width:1.8, color:'#4aa8ff',
+    ll:[[-24.50,116.50],[-24.70,115.80],[-24.88,113.66]] },
+  { name:'Murchison',     minZoom:6, width:1.8, color:'#4aa8ff',
+    ll:[[-27.00,117.50],[-26.50,116.00],[-26.00,114.60],[-27.37,114.60]] },
+  { name:'De Grey',       minZoom:7, width:1.5, color:'#4aa8ff',
+    ll:[[-21.00,120.00],[-20.60,119.20],[-20.31,118.58],[-20.50,118.20]] },
+  { name:'Ord',           minZoom:6, width:1.8, color:'#4aa8ff',
+    ll:[[-17.00,128.50],[-16.50,128.90],[-15.80,128.80],[-15.40,128.50]] },
+  { name:'Fitzroy WA',    minZoom:6, width:2.0, color:'#4aa8ff',
+    ll:[[-18.50,126.00],[-18.20,124.50],[-17.90,123.60],[-17.60,123.20]] },
 ];
 
-// ── Custom Canvas River Layer ──
-const RiverFlowLayer = L.Layer.extend({
-  onAdd(map) {
-    this._map = map;
-    this._canvas = L.DomUtil.create('canvas', 'river-flow-canvas');
-    Object.assign(this._canvas.style, {
-      position:'absolute', top:0, left:0,
-      pointerEvents:'none', zIndex:250
-    });
-    map.getPanes().overlayPane.appendChild(this._canvas);
-    this._ctx = this._canvas.getContext('2d');
-    this._particles = [];
-    this._riskColors = {};
+// ── SVG river lines (positioned by Leaflet, zoom-stable) ──
+const riverSVGLayers = [];
+function buildRiverSVG() {
+  riverSVGLayers.forEach(l => map.removeLayer(l));
+  riverSVGLayers.length = 0;
+  const zoom = map.getZoom();
+  RIVERS.forEach(r => {
+    if (zoom < r.minZoom) return;
+    const alpha = Math.min(0.55, 0.15 + (zoom - r.minZoom) * 0.1);
+    const w = r.width * Math.max(0.5, Math.min(1.8, (zoom - 2) / 6));
+    const pl = L.polyline(r.ll, {
+      color: r.color, weight: w, opacity: alpha,
+      smoothFactor: 1.5, className: 'river-svg-line'
+    }).addTo(map);
+    riverSVGLayers.push(pl);
+  });
+}
 
-    map.on('moveend zoomend', () => this._reset());
-    this._reset();
-    this._animFrame = requestAnimationFrame(() => this._tick());
-    return this;
-  },
+// ── Canvas particle overlay — fixed to viewport, recomputes each frame ──
+const riverCanvas = document.createElement('canvas');
+riverCanvas.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:450;';
+document.getElementById('map').appendChild(riverCanvas);
+const riverCtx = riverCanvas.getContext('2d');
 
-  onRemove(map) {
-    cancelAnimationFrame(this._animFrame);
-    map.getPanes().overlayPane.removeChild(this._canvas);
-    map.off('moveend zoomend', () => this._reset());
-  },
+// Resize canvas to match viewport
+function resizeRiverCanvas() {
+  riverCanvas.width  = window.innerWidth;
+  riverCanvas.height = window.innerHeight;
+}
+resizeRiverCanvas();
+window.addEventListener('resize', resizeRiverCanvas);
 
-  // Called when gauge risk data arrives
-  updateRiskColors(colorMap) {
-    this._riskColors = colorMap; // { 'Brisbane R.': '#ff4f4f', ... }
-  },
+// Particles: each has a river index + t (0→1 along path)
+let riverParticles = [];
 
-  _reset() {
-    const size = this._map.getSize();
-    this._canvas.width  = size.x;
-    this._canvas.height = size.y;
-    this._canvas.style.width  = size.x + 'px';
-    this._canvas.style.height = size.y + 'px';
-    this._buildSegments();
-  },
-
-  _buildSegments() {
-    const zoom = this._map.getZoom();
-    this._segments = [];
-    this._particles = [];
-
-    RIVERS.forEach(river => {
-      if (zoom < river.minZoom) return;
-
-      // Convert all coords to pixel points
-      const pts = river.coords.map(c =>
-        this._map.latLngToContainerPoint(L.latLng(c[0], c[1]))
-      );
-
-      // Opacity scales with zoom (fade in smoothly)
-      const opacityFactor = Math.min(1, (zoom - river.minZoom + 1) / 2);
-      // Width scales with zoom
-      const w = river.width * Math.max(0.6, (zoom - 3) / 5);
-
-      // Determine colour from risk data
-      const baseColor = this._riskColors[river.name] || '#4aa8ff';
-
-      this._segments.push({ pts, width: w, color: baseColor, opacity: opacityFactor, river });
-
-      // Spawn particles along this river
-      const totalLen = this._pathLength(pts);
-      const count = Math.max(1, Math.floor(totalLen / 80));
-      for (let i = 0; i < count; i++) {
-        this._particles.push({
-          river: this._segments.length - 1,
-          t: Math.random(),         // position along path 0→1
-          speed: 0.0008 + Math.random() * 0.0006,
-          size: w * 0.65 + Math.random() * w * 0.3,
-          alpha: 0.5 + Math.random() * 0.4,
-        });
-      }
-    });
-  },
-
-  _pathLength(pts) {
-    let len = 0;
-    for (let i = 1; i < pts.length; i++) {
-      const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
-      len += Math.sqrt(dx*dx + dy*dy);
+function rebuildParticles() {
+  riverParticles = [];
+  const zoom = map.getZoom();
+  RIVERS.forEach((r, ri) => {
+    if (zoom < r.minZoom) return;
+    // More particles at higher zoom
+    const count = Math.max(2, Math.round(r.ll.length * 1.5 * (zoom - r.minZoom + 1)));
+    for (let i = 0; i < count; i++) {
+      riverParticles.push({
+        ri,
+        t: Math.random(),
+        speed: (0.0004 + Math.random() * 0.0005) / Math.max(1, r.ll.length * 0.3),
+        size: r.width * 0.7,
+        alpha: 0.55 + Math.random() * 0.35,
+      });
     }
-    return len;
-  },
+  });
+}
 
-  _pointAtT(pts, t) {
-    // Walk along segments to find point at normalised position t
-    const totalLen = this._pathLength(pts);
-    const target = t * totalLen;
-    let walked = 0;
-    for (let i = 1; i < pts.length; i++) {
-      const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
-      const segLen = Math.sqrt(dx*dx + dy*dy);
-      if (walked + segLen >= target) {
-        const frac = (target - walked) / segLen;
-        return {
-          x: pts[i-1].x + dx * frac,
-          y: pts[i-1].y + dy * frac,
-          angle: Math.atan2(dy, dx)
-        };
-      }
-      walked += segLen;
+// Convert lat/lng path to screen pixel path
+function toScreenPath(ll) {
+  return ll.map(c => {
+    const pt = map.latLngToContainerPoint(L.latLng(c[0], c[1]));
+    return { x: pt.x, y: pt.y };
+  });
+}
+
+function ptAtT(pts, t) {
+  let total = 0;
+  const segs = [];
+  for (let i = 1; i < pts.length; i++) {
+    const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
+    const l = Math.sqrt(dx*dx + dy*dy);
+    segs.push(l); total += l;
+  }
+  let target = t * total, walked = 0;
+  for (let i = 0; i < segs.length; i++) {
+    if (walked + segs[i] >= target) {
+      const f = (target - walked) / segs[i];
+      const dx = pts[i+1].x - pts[i].x, dy = pts[i+1].y - pts[i].y;
+      return { x: pts[i].x + dx*f, y: pts[i].y + dy*f,
+               angle: Math.atan2(dy, dx) };
     }
-    return { x: pts[pts.length-1].x, y: pts[pts.length-1].y, angle: 0 };
-  },
-
-  _tick() {
-    const ctx = this._ctx;
-    const W = this._canvas.width, H = this._canvas.height;
-    ctx.clearRect(0, 0, W, H);
-
-    // Draw river lines
-    this._segments.forEach(seg => {
-      if (seg.pts.length < 2) return;
-      ctx.save();
-      ctx.globalAlpha = seg.opacity * 0.45;
-      ctx.strokeStyle = seg.color;
-      ctx.lineWidth = seg.width;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      // Glow effect
-      ctx.shadowColor = seg.color;
-      ctx.shadowBlur = seg.width * 2.5;
-
-      ctx.beginPath();
-      ctx.moveTo(seg.pts[0].x, seg.pts[0].y);
-      for (let i = 1; i < seg.pts.length; i++) {
-        ctx.lineTo(seg.pts[i].x, seg.pts[i].y);
-      }
-      ctx.stroke();
-      ctx.restore();
-    });
-
-    // Draw + advance particles
-    this._particles.forEach(p => {
-      const seg = this._segments[p.river];
-      if (!seg) return;
-
-      p.t += p.speed;
-      if (p.t > 1) p.t = 0;
-
-      const pos = this._pointAtT(seg.pts, p.t);
-
-      ctx.save();
-      ctx.globalAlpha = p.alpha * seg.opacity;
-      ctx.fillStyle = seg.color;
-      ctx.shadowColor = seg.color;
-      ctx.shadowBlur = p.size * 3;
-
-      // Small teardrop pointing downstream
-      ctx.translate(pos.x, pos.y);
-      ctx.rotate(pos.angle);
-      ctx.beginPath();
-      ctx.ellipse(0, 0, p.size * 1.6, p.size * 0.7, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    });
-
-    this._animFrame = requestAnimationFrame(() => this._tick());
+    walked += segs[i];
   }
-});
+  const last = pts[pts.length-1];
+  return { x: last.x, y: last.y, angle: 0 };
+}
 
-const riverLayer = new RiverFlowLayer();
-riverLayer.addTo(map);
+function tickRiverParticles() {
+  const W = riverCanvas.width, H = riverCanvas.height;
+  riverCtx.clearRect(0, 0, W, H);
+  const zoom = map.getZoom();
 
-// Hook into layer pill toggle
-const _origToggle = window.togglePill;
-window.togglePill = function(el, layer) {
-  if (layer === 'zones') {
-    // also handled below
-  }
-  _origToggle && _origToggle(el, layer);
-};
+  riverParticles.forEach(p => {
+    const r = RIVERS[p.ri];
+    if (!r || zoom < r.minZoom) return;
+
+    p.t += p.speed;
+    if (p.t >= 1) p.t = 0;
+
+    const pts = toScreenPath(r.ll);
+    if (pts.length < 2) return;
+
+    const pos = ptAtT(pts, p.t);
+    // Cull off-screen
+    if (pos.x < -20 || pos.x > W+20 || pos.y < -20 || pos.y > H+20) return;
+
+    const fadeZoom = Math.min(1, (zoom - r.minZoom + 1) / 2);
+    riverCtx.save();
+    riverCtx.globalAlpha = p.alpha * fadeZoom;
+    riverCtx.fillStyle = r.color;
+    riverCtx.shadowColor = r.color;
+    riverCtx.shadowBlur = p.size * 4;
+    riverCtx.translate(pos.x, pos.y);
+    riverCtx.rotate(pos.angle);
+    riverCtx.beginPath();
+    // Teardrop shape oriented in flow direction
+    riverCtx.ellipse(0, 0, p.size * 1.8, p.size * 0.6, 0, 0, Math.PI*2);
+    riverCtx.fill();
+    riverCtx.restore();
+  });
+
+  requestAnimationFrame(tickRiverParticles);
+}
+
+// Build SVG lines + particles, rebuild on zoom
+buildRiverSVG();
+rebuildParticles();
+map.on('zoomend', () => { buildRiverSVG(); rebuildParticles(); });
+
+// Start animation
+requestAnimationFrame(tickRiverParticles);
+
+// Global colour update from gauge risk data
+function updateRiverColors(nameColorMap) {
+  RIVERS.forEach(r => {
+    const match = Object.keys(nameColorMap).find(k =>
+      r.name.toLowerCase().includes(k.toLowerCase()) ||
+      k.toLowerCase().includes(r.name.toLowerCase().split(' ')[0])
+    );
+    r.color = match ? nameColorMap[match] : '#4aa8ff';
+  });
+  // Rebuild SVG lines with new colours
+  buildRiverSVG();
+}
 
 // ══════════════════════════════════════════
 //  GAUGE CONFIG — coords + metadata
@@ -1139,16 +1115,8 @@ async function fetchGaugeData() {
     // Map gauge river name to colour (partial match)
     riverRiskMap[g.river.replace(' R.','')] = color;
   });
-  // Apply to river layer
-  if (riverLayer) {
-    const fullMap = {};
-    RIVERS.forEach(r => {
-      const key = Object.keys(riverRiskMap).find(k => r.name.includes(k));
-      fullMap[r.name] = key ? riverRiskMap[key] : '#4aa8ff';
-    });
-    riverLayer.updateRiskColors(fullMap);
-    riverLayer._reset();
-  }
+  // Update river colours based on risk
+  updateRiverColors(riverRiskMap);
 }
 
 function updateVerdict(risk, pct) {
