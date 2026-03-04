@@ -492,6 +492,13 @@ canvas#spark { width:100%; height:55px; display:block; margin-top:8px; }
   <!-- MAP -->
   <div id="map">
     <canvas id="rainCanvas"></canvas>
+    <div id="radarTimestamp" style="
+      position:absolute; bottom:60px; right:16px; z-index:500;
+      background:rgba(6,9,15,0.88); border:1px solid rgba(100,180,255,0.15);
+      border-radius:8px; padding:5px 10px;
+      font-family:'DM Mono',monospace; font-size:10px; color:#4aa8ff;
+      display:none; pointer-events:none;
+    ">⏱ --:--</div>
     <div class="map-controls">
       <div class="mc-btn" onclick="map.zoomIn()" title="Zoom in">+</div>
       <div class="mc-btn" onclick="map.zoomOut()" title="Zoom out">−</div>
@@ -505,9 +512,10 @@ canvas#spark { width:100%; height:55px; display:block; margin-top:8px; }
       <div class="rr-item"><div class="rr-val rr-risk-high" id="s-risk">HIGH</div><div class="rr-lbl">risk</div></div>
     </div>
     <div class="layer-bar">
-      <div class="layer-pill on" onclick="togglePill(this,'rain')">💧 Rain</div>
+      <div class="layer-pill on" id="radarPill" onclick="togglePill(this,'radar')">🌧 Radar</div>
       <div class="layer-pill on" onclick="togglePill(this,'zones')">🌊 Zones</div>
       <div class="layer-pill on" onclick="togglePill(this,'gauges')">📍 Gauges</div>
+      <div class="layer-pill" id="playPill" onclick="toggleRadarPlay()">▶ Animate</div>
     </div>
     <div class="map-legend">
       <div class="ml-title">FLOOD RISK</div>
@@ -1177,12 +1185,16 @@ document.getElementById('map').addEventListener('click', () => {
 // ══════════════════════════════════════════
 //  LAYER TOGGLES
 // ══════════════════════════════════════════
-let layerState = { rain:true, zones:true, gauges:true };
+let layerState = { radar:true, zones:true, gauges:true };
 function togglePill(el, layer) {
   layerState[layer] = !layerState[layer];
   el.classList.toggle('on');
   if (layer === 'zones') zoneCircles.forEach(c => layerState.zones ? map.addLayer(c) : map.removeLayer(c));
-  if (layer === 'rain')  document.getElementById('rainCanvas').style.opacity = layerState.rain ? '1' : '0';
+  if (layer === 'radar') {
+    if (layerState.radar) { showFrame(animationPosition, false); }
+    else { if (radarLayers[animationPosition]) map.removeLayer(radarLayers[animationPosition]); }
+    document.getElementById('radarTimestamp').style.display = layerState.radar ? 'block' : 'none';
+  }
 }
 
 // ══════════════════════════════════════════
@@ -1200,52 +1212,141 @@ function focusGauge(el, lat, lng) {
 }
 
 // ══════════════════════════════════════════
-//  RAIN CANVAS
+//  RAINVIEWER RADAR — real animated radar tiles
+//  Free, no API key, updates every ~5 min
 // ══════════════════════════════════════════
+let apiData = {};
+let mapFrames = [];
+let radarLayers = [];
+let animationPosition = 0;
+let animationTimer = null;
+let isPlaying = false;
+
+// Color scheme 6 = "TheWeatherChannel" blue→green→yellow→red
+const RADAR_COLOR  = 6;
+const RADAR_SMOOTH = 1;
+const RADAR_SNOW   = 0;
+const RADAR_SIZE   = 256;
+const RADAR_EXT    = 'png';
+const RADAR_OPACITY = 0.55;
+
+function loadRainViewerData() {
+  fetch('https://api.rainviewer.com/public/weather-maps.json')
+    .then(r => r.json())
+    .then(data => {
+      apiData = data;
+      initRadarFrames(data);
+    })
+    .catch(e => console.warn('RainViewer fetch failed:', e));
+}
+
+function initRadarFrames(api) {
+  // Remove old layers
+  radarLayers.forEach(l => { if (l && map.hasLayer(l)) map.removeLayer(l); });
+  radarLayers = [];
+  mapFrames = [];
+
+  if (!api || !api.radar) return;
+  mapFrames = (api.radar.past || []).concat(api.radar.nowcast || []);
+
+  // Pre-create tile layers (but don't add to map yet)
+  mapFrames.forEach(frame => {
+    const url = `${api.host}${frame.path}/${RADAR_SIZE}/{z}/{x}/{y}/${RADAR_COLOR}/${RADAR_SMOOTH}_${RADAR_SNOW}.${RADAR_EXT}`;
+    radarLayers.push(L.tileLayer(url, { opacity: 0, zIndex: 500, attribution: 'RainViewer' }));
+  });
+
+  // Show latest frame
+  animationPosition = mapFrames.length - 1;
+  if (layerState.radar) {
+    showFrame(animationPosition, false);
+    document.getElementById('radarTimestamp').style.display = 'block';
+  }
+}
+
+function showFrame(pos, preloadOnly) {
+  const prevPos = animationPosition;
+  animationPosition = pos;
+
+  // Fade out previous
+  if (radarLayers[prevPos] && prevPos !== pos) {
+    radarLayers[prevPos].setOpacity(0);
+  }
+
+  // Add and fade in current
+  const layer = radarLayers[pos];
+  if (!layer) return;
+  if (!map.hasLayer(layer)) layer.addTo(map);
+  if (!preloadOnly) layer.setOpacity(RADAR_OPACITY);
+
+  // Preload next
+  const next = radarLayers[pos + 1];
+  if (next && !map.hasLayer(next)) next.addTo(map);
+
+  // Update timestamp
+  const ts = document.getElementById('radarTimestamp');
+  if (ts && mapFrames[pos]) {
+    const d = new Date(mapFrames[pos].time * 1000);
+    const isNowcast = pos >= (apiData.radar?.past?.length || 999);
+    const lbl = d.toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit' });
+    ts.textContent = isNowcast ? `▶ Forecast ${lbl}` : `⏱ Radar ${lbl}`;
+    ts.style.color = isNowcast ? '#f5c542' : '#4aa8ff';
+  }
+}
+
+function toggleRadarPlay() {
+  const pill = document.getElementById('playPill');
+  isPlaying = !isPlaying;
+  if (isPlaying) {
+    pill.textContent = '⏸ Pause';
+    pill.classList.add('on');
+    animateRadar();
+  } else {
+    pill.textContent = '▶ Animate';
+    pill.classList.remove('on');
+    if (animationTimer) clearTimeout(animationTimer);
+  }
+}
+
+function animateRadar() {
+  if (!isPlaying) return;
+  const next = (animationPosition + 1) % mapFrames.length;
+  showFrame(next, false);
+  // Slower on last frame (current), faster through history
+  const delay = next === mapFrames.length - 1 ? 1200 : 400;
+  animationTimer = setTimeout(animateRadar, delay);
+}
+
+// Load radar on start, refresh every 5 minutes
+loadRainViewerData();
+setInterval(loadRainViewerData, 5 * 60 * 1000);
+
+// Keep thin animated rain drops as a subtle overlay on canvas (much lighter now)
 const rc = document.getElementById('rainCanvas');
 const rct = rc.getContext('2d');
 let drops = [], rW, rH;
-
 function resizeRain() {
-  rW = rc.width  = rc.offsetWidth;
+  rW = rc.width = rc.offsetWidth;
   rH = rc.height = rc.offsetHeight;
-  drops = Array.from({ length: window.innerWidth < 768 ? 200 : 350 }, () => mkDrop());
+  drops = Array.from({ length: 80 }, () => mkDrop());
 }
-
 function mkDrop(x) {
-  return {
-    x: x !== undefined ? x : Math.random()*rW, y: Math.random()*rH,
-    len: 9+Math.random()*20, speed: 5+Math.random()*11,
-    alpha: .07+Math.random()*.28, w: .5+Math.random()*1.1,
-    ang: .14+Math.random()*.08
-  };
+  return { x: x !== undefined ? x : Math.random()*rW, y: Math.random()*rH,
+    len:6+Math.random()*10, speed:4+Math.random()*7,
+    alpha:.04+Math.random()*.1, w:.4+Math.random()*.7, ang:.14+Math.random()*.06 };
 }
-
 function animRain() {
-  rct.clearRect(0, 0, rW, rH);
-  if (layerState.rain) {
-    drops.forEach(d => {
-      rct.beginPath();
-      rct.moveTo(d.x, d.y);
-      rct.lineTo(d.x - d.len*Math.sin(d.ang), d.y + d.len*Math.cos(d.ang));
-      rct.strokeStyle = `rgba(130,195,255,${d.alpha})`;
-      rct.lineWidth = d.w; rct.stroke();
-      d.x -= d.speed*Math.sin(d.ang); d.y += d.speed*Math.cos(d.ang);
-      if (d.y > rH+20 || d.x < -20) { Object.assign(d, mkDrop(Math.random()*rW)); d.y = -10; }
-    });
-    const t = Date.now()/1000;
-    for (let i=0; i<5; i++) {
-      const px=(rW*(.05+i*.18))%rW, py=rH-14-Math.random()*3;
-      const r=((t*38+i*110)%55), a=Math.max(0,.22-r/55);
-      rct.beginPath(); rct.ellipse(px,py,r*1.5,r*.4,0,0,Math.PI*2);
-      rct.strokeStyle=`rgba(130,195,255,${a*.4})`; rct.lineWidth=.7; rct.stroke();
-    }
-  }
+  rct.clearRect(0,0,rW,rH);
+  drops.forEach(d => {
+    rct.beginPath(); rct.moveTo(d.x,d.y);
+    rct.lineTo(d.x-d.len*Math.sin(d.ang), d.y+d.len*Math.cos(d.ang));
+    rct.strokeStyle=`rgba(130,195,255,${d.alpha})`; rct.lineWidth=d.w; rct.stroke();
+    d.x-=d.speed*Math.sin(d.ang); d.y+=d.speed*Math.cos(d.ang);
+    if(d.y>rH+10||d.x<-10){Object.assign(d,mkDrop(Math.random()*rW));d.y=-5;}
+  });
   requestAnimationFrame(animRain);
 }
-
 window.addEventListener('resize', resizeRain);
-setTimeout(() => { resizeRain(); animRain(); }, 120);
+setTimeout(()=>{resizeRain();animRain();},120);
 
 // ══════════════════════════════════════════
 //  BOOT — fetch all real data on load
