@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FloodWatch — Australia</title>
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg:      #06090f;
+  --panel:   #0c1320;
+  --panel2:  #101928;
+  --border:  rgba(100,180,255,0.09);
+  --low:     #22d98a;
+  --mid:     #f5c542;
+  --high:    #ff4f4f;
+  --blue:    #4aa8ff;
+  --text:    #c8dff5;
+  --muted:   #4a6080;
+  --nav-h:   52px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+}
+
+/* ─── NAV ─── */
+nav {
+  position: fixed; top:0; left:0; right:0;
+  height: var(--nav-h);
+  background: rgba(6,9,15,0.97);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  z-index: 1000;
+  backdrop-filter: blur(12px);
+}
+.logo {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 17px; font-weight: 800; letter-spacing: -0.3px;
+  user-select: none;
+}
+.logo-mark {
+  width: 30px; height: 30px;
+  background: linear-gradient(135deg, #1055cc, #4aa8ff);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+}
+.logo em { color: var(--blue); font-style: normal; }
+
+.search-bar {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 14px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: var(--blue);
+  cursor: pointer;
+  transition: border-color .2s;
+  min-width: 260px;
+}
+.search-bar:hover { border-color: rgba(74,168,255,0.3); }
+.search-bar .ic { color: var(--muted); }
+
+.nav-right { display:flex; align-items:center; gap:14px; }
+.live-badge {
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  color: var(--low); letter-spacing:.5px;
+}
+.live-badge::before {
+  content:'';
+  width:7px; height:7px; border-radius:50%;
+  background: var(--low);
+  animation: blip 2s infinite;
+}
+@keyframes blip {
+  0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,217,138,.5)}
+  50%{opacity:.5;box-shadow:0 0 0 5px rgba(34,217,138,0)}
+}
+.clock { font-family:'DM Mono',monospace; font-size:11px; color:var(--muted); }
+
+/* ─── LAYOUT ─── */
+.app {
+  display: flex;
+  height: 100vh;
+  padding-top: var(--nav-h);
+}
+
+/* ─── MAP ─── */
+#map {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+/* Override Leaflet tiles to dark */
+.leaflet-tile { filter: brightness(0.30) saturate(0.4) hue-rotate(190deg); }
+.leaflet-container { background: #07101e; }
+
+/* Rain canvas over map */
+#rainCanvas {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 400;
+}
+
+/* Map UI overlays */
+.map-controls {
+  position: absolute; top: 16px; left: 16px;
+  z-index: 500;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.mc-btn {
+  width: 36px; height: 36px;
+  background: rgba(6,9,15,0.92);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 14px; color: var(--text);
+  transition: all .15s;
+}
+.mc-btn:hover { border-color:rgba(74,168,255,.35); background:rgba(16,25,40,.97); }
+.mc-btn.active { border-color:var(--blue); color:var(--blue); background:rgba(74,168,255,.1); }
+
+.layer-bar {
+  position: absolute; bottom: 20px; left: 16px;
+  z-index: 500;
+  display: flex; gap: 6px; flex-wrap: wrap; max-width: 360px;
+}
+.layer-pill {
+  padding: 5px 12px;
+  background: rgba(6,9,15,0.92);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-family: 'DM Mono',monospace; font-size: 11px;
+  cursor: pointer; color: var(--muted);
+  transition: all .15s; user-select:none;
+}
+.layer-pill.on { border-color:var(--blue); color:var(--blue); background:rgba(74,168,255,.1); }
+
+.rain-readout {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+  z-index: 500;
+  background: rgba(6,9,15,0.92);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  padding: 8px 18px;
+  display: flex; align-items: center; gap: 16px;
+  backdrop-filter: blur(8px);
+}
+.rr-item { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.rr-val { font-family:'DM Mono',monospace; font-size:16px; font-weight:500; color:var(--blue); }
+.rr-lbl { font-family:'DM Mono',monospace; font-size:9px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; }
+.rr-div { width:1px; height:30px; background:var(--border); }
+.rr-risk-high { color:var(--high) !important; }
+.rr-risk-mid  { color:var(--mid) !important; }
+.rr-risk-low  { color:var(--low) !important; }
+
+.map-legend {
+  position: absolute; bottom: 20px; right: 16px;
+  z-index: 500;
+  background: rgba(6,9,15,0.92);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-family:'DM Mono',monospace; font-size:10px;
+}
+.ml-title { color:var(--muted); margin-bottom:8px; letter-spacing:.5px; }
+.ml-row { display:flex; align-items:center; gap:8px; margin-bottom:5px; color:var(--text); }
+.ml-swatch { width:22px; height:5px; border-radius:3px; }
+
+/* ─── CUSTOM MARKERS ─── */
+.fw-marker {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'DM Mono',monospace; font-size:11px; font-weight:500;
+  border: 2px solid;
+  cursor: pointer;
+  transition: transform .15s;
+  position: relative;
+}
+.fw-marker:hover { transform: scale(1.15); }
+.fw-marker.high { background:rgba(255,79,79,.18); border-color:#ff4f4f; color:#ff4f4f; }
+.fw-marker.mid  { background:rgba(245,197,66,.18); border-color:#f5c542; color:#f5c542; }
+.fw-marker.low  { background:rgba(34,217,138,.15); border-color:#22d98a; color:#22d98a; }
+
+/* My-loc pulse */
+.my-loc {
+  width:14px; height:14px;
+  background:white; border-radius:50%;
+  border:3px solid var(--blue);
+  box-shadow:0 0 0 8px rgba(74,168,255,.2);
+  animation: myPulse 2.5s ease-in-out infinite;
+}
+@keyframes myPulse {
+  0%,100%{box-shadow:0 0 0 6px rgba(74,168,255,.2);}
+  50%{box-shadow:0 0 0 16px rgba(74,168,255,0);}
+}
+
+/* ─── SIDEBAR ─── */
+.sidebar {
+  width: 330px;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+/* Verdict */
+.verdict {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  position: relative; overflow:hidden;
+}
+.verdict-glow {
+  position:absolute; inset:0; pointer-events:none;
+  background: radial-gradient(ellipse at top right, rgba(255,79,79,.12), transparent 65%);
+}
+.v-loc {
+  font-family:'DM Mono',monospace; font-size:11px;
+  color:var(--muted); margin-bottom:10px;
+  display:flex; align-items:center; gap:6px; letter-spacing:.3px;
+}
+.v-main { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+.v-icon {
+  width:46px; height:46px; border-radius:13px; flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; font-size:22px;
+}
+.v-status { font-size:18px; font-weight:800; line-height:1.1; margin-bottom:4px; }
+.v-sub { font-size:11px; color:var(--muted); line-height:1.5; }
+
+/* Risk meter */
+.risk-track {
+  height:5px; border-radius:3px; overflow:hidden;
+  background: linear-gradient(90deg, var(--low), var(--mid), var(--high));
+  margin-bottom:4px; position:relative;
+}
+.risk-needle-wrap { position:relative; height:10px; margin-bottom:6px; }
+.risk-needle {
+  position:absolute; top:0;
+  width:3px; height:10px;
+  background:white; border-radius:2px;
+  transform:translateX(-50%);
+  transition: left 1.2s cubic-bezier(.4,0,.2,1);
+  box-shadow:0 0 6px rgba(255,255,255,.6);
+}
+.risk-lbls { display:flex; justify-content:space-between; font-family:'DM Mono',monospace; font-size:9px; color:var(--muted); }
+
+/* Scrollable content */
+.sb-scroll { flex:1; overflow-y:auto; scrollbar-width:thin; scrollbar-color:rgba(74,168,255,.12) transparent; }
+
+/* Section */
+.sb-section { padding:14px 20px; border-bottom:1px solid var(--border); }
+.sb-title { font-family:'DM Mono',monospace; font-size:10px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-bottom:12px; }
+
+/* Alerts */
+.alert {
+  display:flex; gap:10px; padding:10px; border-radius:8px;
+  border:1px solid; margin-bottom:7px; font-size:12px; line-height:1.45;
+}
+.alert:last-child{margin-bottom:0;}
+.alert-high{background:rgba(255,79,79,.07);border-color:rgba(255,79,79,.28);}
+.alert-mid {background:rgba(245,197,66,.07);border-color:rgba(245,197,66,.28);}
+.alert-info{background:rgba(74,168,255,.07);border-color:rgba(74,168,255,.22);}
+.a-ico{font-size:15px;flex-shrink:0;padding-top:1px;}
+.a-hd{font-weight:700;margin-bottom:2px;}
+.alert-high .a-hd{color:#ff6b6b;}
+.alert-mid  .a-hd{color:#f5c542;}
+.alert-info .a-hd{color:var(--blue);}
+.a-bd{color:var(--muted);font-size:11px;}
+
+/* Gauges */
+.gauge {
+  display:flex; align-items:center; gap:10px;
+  padding:8px 10px; border-radius:8px;
+  border:1px solid transparent; cursor:pointer;
+  transition:all .15s; margin-bottom:6px;
+}
+.gauge:last-child{margin-bottom:0;}
+.gauge:hover{background:rgba(255,255,255,.025);border-color:var(--border);}
+.gauge.sel{background:rgba(74,168,255,.06);border-color:rgba(74,168,255,.25);}
+.g-ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+.g-info{flex:1;min-width:0;}
+.g-name{font-size:12px;font-weight:600;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.g-bar-row{display:flex;align-items:center;gap:6px;}
+.g-bar{flex:1;height:3px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden;}
+.g-fill{height:100%;border-radius:2px;transition:width 1s ease;}
+.g-pct{font-family:'DM Mono',monospace;font-size:10px;min-width:26px;text-align:right;}
+.g-trend{font-size:13px;flex-shrink:0;}
+.g-lvl{font-family:'DM Mono',monospace;font-size:11px;text-align:right;flex-shrink:0;}
+.g-lvl .gv{font-size:13px;font-weight:500;display:block;}
+.g-lvl .gu{font-size:9px;color:var(--muted);}
+
+/* Timeline bars */
+.tl-scroll{display:flex;gap:4px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;}
+.tl-scroll::-webkit-scrollbar{display:none;}
+.tl-col{flex-shrink:0;width:38px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;}
+.tl-lbl{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);}
+.tl-bar{width:100%;border-radius:3px 3px 0 0;transition:height .4s,background .4s;}
+.tl-mm{font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);}
+.tl-col.now .tl-lbl{color:var(--blue);}
+.tl-col.now .tl-bar{outline:1px solid var(--blue);outline-offset:1px;}
+
+/* Sparkline */
+canvas#spark { width:100%; height:60px; display:block; margin-top:10px; }
+
+/* Footer */
+.sb-foot {
+  padding: 9px 20px;
+  border-top: 1px solid var(--border);
+  font-family:'DM Mono',monospace; font-size:10px;
+  color:var(--muted); display:flex; justify-content:space-between;
+}
+.sb-foot a{color:rgba(74,168,255,.55);cursor:pointer;text-decoration:none;}
+
+/* Leaflet popup override */
+.leaflet-popup-content-wrapper {
+  background: rgba(10,18,32,0.97) !important;
+  border: 1px solid rgba(74,168,255,.25) !important;
+  border-radius: 10px !important;
+  color: var(--text) !important;
+  font-family: 'Syne', sans-serif !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6) !important;
+}
+.leaflet-popup-tip { background: rgba(10,18,32,0.97) !important; }
+.leaflet-popup-content { margin: 12px 16px !important; font-size: 13px !important; }
+.popup-title { font-weight:700; font-size:14px; margin-bottom:6px; }
+.popup-row { display:flex; justify-content:space-between; gap:20px; margin-bottom:4px; font-family:'DM Mono',monospace; font-size:11px; }
+.popup-row span:last-child { color:var(--blue); }
+.popup-status { margin-top:8px; padding:5px 10px; border-radius:6px; font-size:11px; text-align:center; font-weight:700; }
+
+/* Leaflet zoom control */
+.leaflet-control-zoom { display:none; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">
+    <div class="logo-mark">💧</div>
+    Flood<em>Watch</em>
+  </div>
+  <div class="search-bar">
+    <span class="ic">🔍</span>
+    Search location or river…
+  </div>
+  <div class="nav-right">
+    <div class="clock" id="clock">--:-- AEST</div>
+    <div class="live-badge">LIVE</div>
+  </div>
+</nav>
+
+<div class="app">
+
+  <!-- MAP -->
+  <div id="map">
+    <canvas id="rainCanvas"></canvas>
+
+    <!-- Map controls -->
+    <div class="map-controls">
+      <div class="mc-btn" onclick="map.zoomIn()" title="Zoom in">+</div>
+      <div class="mc-btn" onclick="map.zoomOut()" title="Zoom out">−</div>
+      <div class="mc-btn" id="locBtn" title="My location" onclick="goMyLocation()">◎</div>
+    </div>
+
+    <!-- Rainfall readout bar -->
+    <div class="rain-readout">
+      <div class="rr-item"><div class="rr-val" id="s-now">38</div><div class="rr-lbl">mm/hr now</div></div>
+      <div class="rr-div"></div>
+      <div class="rr-item"><div class="rr-val" id="s-6h">112</div><div class="rr-lbl">mm last 6h</div></div>
+      <div class="rr-div"></div>
+      <div class="rr-item"><div class="rr-val" id="s-24h">187</div><div class="rr-lbl">mm forecast 24h</div></div>
+      <div class="rr-div"></div>
+      <div class="rr-item"><div class="rr-val rr-risk-high" id="s-risk">HIGH</div><div class="rr-lbl">flood risk</div></div>
+    </div>
+
+    <!-- Layer pills -->
+    <div class="layer-bar">
+      <div class="layer-pill on" onclick="togglePill(this,'rain')">💧 Rainfall</div>
+      <div class="layer-pill on" onclick="togglePill(this,'zones')">🌊 Flood Zones</div>
+      <div class="layer-pill on" onclick="togglePill(this,'gauges')">📍 Gauges</div>
+      <div class="layer-pill" onclick="togglePill(this,'roads')">🚗 Road Closures</div>
+    </div>
+
+    <!-- Legend -->
+    <div class="map-legend">
+      <div class="ml-title">FLOOD RISK</div>
+      <div class="ml-row"><div class="ml-swatch" style="background:var(--high)"></div> High</div>
+      <div class="ml-row"><div class="ml-swatch" style="background:var(--mid)"></div> Moderate</div>
+      <div class="ml-row"><div class="ml-swatch" style="background:var(--low)"></div> Low</div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- VERDICT -->
+    <div class="verdict">
+      <div class="verdict-glow"></div>
+      <div class="v-loc">📍 Brisbane Region · SE Queensland</div>
+      <div class="v-main">
+        <div class="v-icon" style="background:rgba(255,79,79,.13)">⚠️</div>
+        <div>
+          <div class="v-status" style="color:#ff6060">HIGH FLOOD RISK</div>
+          <div class="v-sub">Rivers rising rapidly. Avoid low-lying roads near waterways. Follow BOM warnings.</div>
+        </div>
+      </div>
+      <div class="risk-track"></div>
+      <div class="risk-needle-wrap">
+        <div class="risk-needle" id="needle" style="left:78%"></div>
+      </div>
+      <div class="risk-lbls"><span>LOW</span><span>MODERATE</span><span>HIGH</span></div>
+    </div>
+
+    <div class="sb-scroll">
+
+      <!-- ALERTS -->
+      <div class="sb-section">
+        <div class="sb-title">Active BOM Alerts</div>
+        <div class="alert alert-high">
+          <div class="a-ico">🔴</div>
+          <div>
+            <div class="a-hd">Flash Flood Warning — SE QLD</div>
+            <div class="a-bd">Colleges Crossing gauge 8.4m and rising fast. Road closures active. Do not attempt crossing.</div>
+          </div>
+        </div>
+        <div class="alert alert-mid">
+          <div class="a-ico">🟡</div>
+          <div>
+            <div class="a-hd">Flood Watch — Brisbane River</div>
+            <div class="a-bd">River forecast 3.5m at Moggill. Monitor conditions and be prepared to act.</div>
+          </div>
+        </div>
+        <div class="alert alert-info">
+          <div class="a-ico">🔵</div>
+          <div>
+            <div class="a-hd">Heavy Rainfall Continuing</div>
+            <div class="a-bd">80–120mm expected overnight. Peak intensity 11pm–3am AEST.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GAUGES -->
+      <div class="sb-section">
+        <div class="sb-title">River Gauges — SE QLD</div>
+
+        <div class="gauge sel" onclick="focusGauge(this,-27.51,152.87,'Colleges Crossing')">
+          <div class="g-ico" style="background:rgba(255,79,79,.12)">🌊</div>
+          <div class="g-info">
+            <div class="g-name">Colleges Crossing</div>
+            <div class="g-bar-row">
+              <div class="g-bar"><div class="g-fill" style="width:88%;background:var(--high)"></div></div>
+              <div class="g-pct" style="color:var(--high)">88%</div>
+            </div>
+          </div>
+          <div class="g-trend">📈</div>
+          <div class="g-lvl" style="color:var(--high)"><span class="gv">8.4m</span><span class="gu">+0.4/hr</span></div>
+        </div>
+
+        <div class="gauge" onclick="focusGauge(this,-27.46,152.57,'Lowood')">
+          <div class="g-ico" style="background:rgba(245,197,66,.12)">🌊</div>
+          <div class="g-info">
+            <div class="g-name">Lowood (Brisbane R.)</div>
+            <div class="g-bar-row">
+              <div class="g-bar"><div class="g-fill" style="width:62%;background:var(--mid)"></div></div>
+              <div class="g-pct" style="color:var(--mid)">62%</div>
+            </div>
+          </div>
+          <div class="g-trend">📈</div>
+          <div class="g-lvl" style="color:var(--mid)"><span class="gv">5.1m</span><span class="gu">+0.2/hr</span></div>
+        </div>
+
+        <div class="gauge" onclick="focusGauge(this,-26.97,152.33,'Kilcoy')">
+          <div class="g-ico" style="background:rgba(245,197,66,.12)">🌊</div>
+          <div class="g-info">
+            <div class="g-name">Kilcoy (Stanley R.)</div>
+            <div class="g-bar-row">
+              <div class="g-bar"><div class="g-fill" style="width:54%;background:var(--mid)"></div></div>
+              <div class="g-pct" style="color:var(--mid)">54%</div>
+            </div>
+          </div>
+          <div class="g-trend">➡</div>
+          <div class="g-lvl" style="color:var(--mid)"><span class="gv">3.8m</span><span class="gu">stable</span></div>
+        </div>
+
+        <div class="gauge" onclick="focusGauge(this,-27.64,152.58,'Rosewood')">
+          <div class="g-ico" style="background:rgba(34,217,138,.1)">🌊</div>
+          <div class="g-info">
+            <div class="g-name">Rosewood (Bremer R.)</div>
+            <div class="g-bar-row">
+              <div class="g-bar"><div class="g-fill" style="width:28%;background:var(--low)"></div></div>
+              <div class="g-pct" style="color:var(--low)">28%</div>
+            </div>
+          </div>
+          <div class="g-trend">📉</div>
+          <div class="g-lvl" style="color:var(--low)"><span class="gv">1.9m</span><span class="gu">−0.1/hr</span></div>
+        </div>
+
+        <div class="gauge" onclick="focusGauge(this,-27.19,152.83,'Dayboro')">
+          <div class="g-ico" style="background:rgba(34,217,138,.1)">🌊</div>
+          <div class="g-info">
+            <div class="g-name">Dayboro (N.Pine R.)</div>
+            <div class="g-bar-row">
+              <div class="g-bar"><div class="g-fill" style="width:22%;background:var(--low)"></div></div>
+              <div class="g-pct" style="color:var(--low)">22%</div>
+            </div>
+          </div>
+          <div class="g-trend">📉</div>
+          <div class="g-lvl" style="color:var(--low)"><span class="gv">1.4m</span><span class="gu">−0.2/hr</span></div>
+        </div>
+
+      </div>
+
+      <!-- HOURLY FORECAST -->
+      <div class="sb-section">
+        <div class="sb-title">Rainfall Forecast — Next 12hrs</div>
+        <div class="tl-scroll" id="tlScroll"></div>
+        <canvas id="spark" height="60"></canvas>
+      </div>
+
+    </div>
+
+    <div class="sb-foot">
+      <span>BOM · USGS · OpenStreetMap</span>
+      <a>Sources ↗</a>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  CLOCK
+// ══════════════════════════════════════════
+function tick() {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    n.getHours().toString().padStart(2,'0') + ':' +
+    n.getMinutes().toString().padStart(2,'0') + ' AEST';
+}
+tick(); setInterval(tick, 20000);
+
+// ══════════════════════════════════════════
+//  LEAFLET MAP  — SE Queensland
+// ══════════════════════════════════════════
+const map = L.map('map', {
+  center: [-27.47, 152.65],
+  zoom: 9,
+  zoomControl: false,
+  attributionControl: false
+});
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 18,
+  attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+L.control.attribution({ position:'bottomleft', prefix:false })
+  .addAttribution('<span style="color:#4a6080;font-family:DM Mono,monospace;font-size:9px">© OpenStreetMap contributors</span>')
+  .addTo(map);
+
+// ── Flood zone circles ──
+const zones = [
+  { lat:-27.51, lng:152.87, r:9000,  risk:'high', label:'Colleges Crossing' },
+  { lat:-27.46, lng:152.57, r:7000,  risk:'mid',  label:'Lowood Area' },
+  { lat:-26.97, lng:152.33, r:5500,  risk:'mid',  label:'Kilcoy Area' },
+  { lat:-27.64, lng:152.58, r:4500,  risk:'low',  label:'Rosewood Area' },
+  { lat:-27.19, lng:152.83, r:4000,  risk:'low',  label:'Dayboro Area' },
+];
+const riskColor = { high:'#ff4f4f', mid:'#f5c542', low:'#22d98a' };
+const zoneCircles = zones.map(z => {
+  return L.circle([z.lat, z.lng], {
+    radius: z.r,
+    color: riskColor[z.risk],
+    fillColor: riskColor[z.risk],
+    fillOpacity: 0.12,
+    weight: 1.5,
+    opacity: 0.45,
+    dashArray: z.risk === 'low' ? '4,6' : null
+  }).addTo(map);
+});
+
+// ── River polylines ──
+const rivers = [
+  // Brisbane River (simplified)
+  { coords:[[-26.62,152.21],[-26.80,152.38],[-27.00,152.50],[-27.20,152.55],[-27.35,152.62],[-27.46,152.70],[-27.51,152.87],[-27.54,152.98],[-27.47,153.02],[-27.38,153.05]], w:3.5, op:0.55 },
+  // Stanley River
+  { coords:[[-26.55,152.15],[-26.70,152.22],[-26.85,152.28],[-26.97,152.33]], w:2, op:0.4 },
+  // Bremer River
+  { coords:[[-27.90,152.35],[-27.75,152.45],[-27.64,152.58],[-27.55,152.72],[-27.54,152.98]], w:2, op:0.4 },
+  // North Pine River
+  { coords:[[-26.90,152.70],[-26.97,152.75],[-27.05,152.78],[-27.10,152.80],[-27.19,152.83]], w:1.8, op:0.35 },
+];
+rivers.forEach(r => {
+  L.polyline(r.coords, {
+    color:'#4aa8ff', weight:r.w, opacity:r.op,
+    smoothFactor:1
+  }).addTo(map);
+});
+
+// ── Gauge markers ──
+function makeIcon(risk, label) {
+  const sym = { high:'⚠', mid:'~', low:'✓' }[risk];
+  return L.divIcon({
+    className: '',
+    html: `<div class="fw-marker ${risk}" title="${label}">${sym}</div>`,
+    iconSize: [38,38],
+    iconAnchor: [19,19],
+    popupAnchor: [0,-22]
+  });
+}
+
+const gaugeData = [
+  { lat:-27.51, lng:152.87, risk:'high', name:'Colleges Crossing', level:'8.4m', rate:'+0.4m/hr', pct:88, river:'Bremer R.' },
+  { lat:-27.46, lng:152.57, risk:'mid',  name:'Lowood',            level:'5.1m', rate:'+0.2m/hr', pct:62, river:'Brisbane R.' },
+  { lat:-26.97, lng:152.33, risk:'mid',  name:'Kilcoy',            level:'3.8m', rate:'stable',   pct:54, river:'Stanley R.' },
+  { lat:-27.64, lng:152.58, risk:'low',  name:'Rosewood',          level:'1.9m', rate:'−0.1m/hr', pct:28, river:'Bremer R.' },
+  { lat:-27.19, lng:152.83, risk:'low',  name:'Dayboro',           level:'1.4m', rate:'−0.2m/hr', pct:22, river:'N. Pine R.' },
+];
+
+const statusLabel = { high:'⚠ High Risk — Rising', mid:'~ Moderate — Monitor', low:'✓ Low — Normal' };
+const statusStyle  = { high:'background:rgba(255,79,79,.15);color:#ff6b6b;', mid:'background:rgba(245,197,66,.12);color:#f5c542;', low:'background:rgba(34,217,138,.1);color:#22d98a;' };
+
+gaugeData.forEach(g => {
+  const m = L.marker([g.lat, g.lng], { icon: makeIcon(g.risk, g.name) }).addTo(map);
+  m.bindPopup(`
+    <div class="popup-title">📍 ${g.name}</div>
+    <div class="popup-row"><span>${g.river}</span></div>
+    <div class="popup-row"><span>Water Level</span><span>${g.level}</span></div>
+    <div class="popup-row"><span>Change Rate</span><span>${g.rate}</span></div>
+    <div class="popup-row"><span>Capacity</span><span>${g.pct}%</span></div>
+    <div class="popup-status" style="${statusStyle[g.risk]}">${statusLabel[g.risk]}</div>
+  `, { maxWidth: 220 });
+});
+
+// ── My location (fixed SE QLD spot) ──
+const myLocIcon = L.divIcon({
+  className:'', html:'<div class="my-loc"></div>',
+  iconSize:[14,14], iconAnchor:[7,7]
+});
+L.marker([-27.50, 152.75], { icon: myLocIcon }).addTo(map);
+
+// ── Focus gauge on click ──
+function focusGauge(el, lat, lng, name) {
+  document.querySelectorAll('.gauge').forEach(g => g.classList.remove('sel'));
+  el.classList.add('sel');
+  map.flyTo([lat, lng], 11, { duration:1.2 });
+}
+
+// ── My location button ──
+function goMyLocation() {
+  map.flyTo([-27.47, 152.65], 9, { duration:1.2 });
+}
+
+// ── Layer toggles ──
+let layerState = { rain:true, zones:true, gauges:true, roads:false };
+function togglePill(el, layer) {
+  layerState[layer] = !layerState[layer];
+  el.classList.toggle('on');
+  if (layer === 'zones') {
+    zoneCircles.forEach(c => layerState.zones ? map.addLayer(c) : map.removeLayer(c));
+  }
+  if (layer === 'rain') {
+    document.getElementById('rainCanvas').style.opacity = layerState.rain ? '1' : '0';
+  }
+}
+
+// ══════════════════════════════════════════
+//  RAIN CANVAS
+// ══════════════════════════════════════════
+const rc  = document.getElementById('rainCanvas');
+const rct = rc.getContext('2d');
+let drops = [], rW, rH;
+
+function resizeRain() {
+  rW = rc.width  = rc.offsetWidth;
+  rH = rc.height = rc.offsetHeight;
+  drops = Array.from({ length: 350 }, () => randomDrop());
+}
+
+function randomDrop(x) {
+  return {
+    x: x !== undefined ? x : Math.random() * rW,
+    y: Math.random() * rH,
+    len:   9  + Math.random() * 20,
+    speed: 5  + Math.random() * 11,
+    alpha: .07 + Math.random() * .3,
+    w:     .5  + Math.random() * 1.1,
+    ang:   .14 + Math.random() * .08,
+  };
+}
+
+function animRain() {
+  rct.clearRect(0, 0, rW, rH);
+  if (!layerState.rain) { requestAnimationFrame(animRain); return; }
+
+  drops.forEach(d => {
+    rct.beginPath();
+    rct.moveTo(d.x, d.y);
+    rct.lineTo(d.x - d.len * Math.sin(d.ang), d.y + d.len * Math.cos(d.ang));
+    rct.strokeStyle = `rgba(130,195,255,${d.alpha})`;
+    rct.lineWidth = d.w;
+    rct.stroke();
+    d.x -= d.speed * Math.sin(d.ang);
+    d.y += d.speed * Math.cos(d.ang);
+    if (d.y > rH + 20 || d.x < -20) {
+      Object.assign(d, randomDrop(Math.random() * rW)); d.y = -10;
+    }
+  });
+
+  // Ripples near bottom
+  const t = Date.now() / 1000;
+  for (let i = 0; i < 6; i++) {
+    const px = (rW * (.05 + i * .16)) % rW;
+    const py = rH - 15 - Math.random() * 3;
+    const r  = ((t * 38 + i * 110) % 55);
+    const a  = Math.max(0, .25 - r/55);
+    rct.beginPath();
+    rct.ellipse(px, py, r*1.5, r*.45, 0, 0, Math.PI*2);
+    rct.strokeStyle = `rgba(130,195,255,${a*.4})`;
+    rct.lineWidth = .7;
+    rct.stroke();
+  }
+  requestAnimationFrame(animRain);
+}
+
+window.addEventListener('resize', resizeRain);
+// Wait for layout then init
+setTimeout(() => { resizeRain(); animRain(); }, 100);
+
+// ══════════════════════════════════════════
+//  TIMELINE
+// ══════════════════════════════════════════
+const tlData = [
+  {h:'7pm',mm:22},{h:'8pm',mm:35},{h:'9pm',mm:48},{h:'10pm',mm:62},
+  {h:'NOW',mm:38,now:true},{h:'12am',mm:75},{h:'1am',mm:88},{h:'2am',mm:92},
+  {h:'3am',mm:85},{h:'4am',mm:70},{h:'5am',mm:55},{h:'6am',mm:40}
+];
+const maxMM = 92;
+const tlEl = document.getElementById('tlScroll');
+tlData.forEach(d => {
+  const bh = Math.round((d.mm/maxMM)*44)+4;
+  const col = d.mm > 70 ? 'var(--high)' : d.mm > 44 ? 'var(--mid)' : 'var(--blue)';
+  const el = document.createElement('div');
+  el.className = 'tl-col' + (d.now ? ' now' : '');
+  el.innerHTML = `<div class="tl-lbl">${d.h}</div>
+    <div class="tl-bar" style="height:${bh}px;background:${col};opacity:${.45 + d.mm/maxMM*.55}"></div>
+    <div class="tl-mm">${d.mm}</div>`;
+  tlEl.appendChild(el);
+});
+
+// ══════════════════════════════════════════
+//  SPARKLINE — 24h river level chart
+// ══════════════════════════════════════════
+(function drawSpark() {
+  const sc = document.getElementById('spark');
+  const s  = sc.getContext('2d');
+  sc.width  = sc.offsetWidth * 2;
+  sc.height = 120;
+  const W = sc.width, H = sc.height;
+
+  const data  = [3.2,3.4,3.9,4.5,5.1,5.8,6.4,7.0,7.8,8.4,8.7,8.5,8.2,7.8,7.2,6.6,6.0,5.4,4.9,4.5,4.1,3.8,3.6,3.4];
+  const minV  = 2.5, maxV = 9.5;
+  const pts   = data.map((v,i) => [i/(data.length-1)*W, H-(v-minV)/(maxV-minV)*H]);
+
+  const g = s.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'rgba(255,79,79,.38)');
+  g.addColorStop(.5,'rgba(245,197,66,.18)');
+  g.addColorStop(1,'rgba(74,168,255,.04)');
+
+  s.beginPath();
+  s.moveTo(pts[0][0], H);
+  pts.forEach(p => s.lineTo(p[0],p[1]));
+  s.lineTo(pts[pts.length-1][0], H);
+  s.closePath();
+  s.fillStyle = g; s.fill();
+
+  s.beginPath();
+  pts.forEach((p,i) => i ? s.lineTo(p[0],p[1]) : s.moveTo(p[0],p[1]));
+  s.strokeStyle='#ff6060'; s.lineWidth=3; s.lineJoin='round'; s.stroke();
+
+  const cur = pts[9];
+  s.beginPath(); s.arc(cur[0],cur[1],5,0,Math.PI*2);
+  s.fillStyle='#ff6060'; s.fill();
+  s.beginPath(); s.arc(cur[0],cur[1],10,0,Math.PI*2);
+  s.strokeStyle='rgba(255,80,80,.35)'; s.lineWidth=2; s.stroke();
+
+  const fy = H-(7.5-minV)/(maxV-minV)*H;
+  s.setLineDash([6,4]);
+  s.beginPath(); s.moveTo(0,fy); s.lineTo(W,fy);
+  s.strokeStyle='rgba(255,79,79,.4)'; s.lineWidth=1.5; s.stroke();
+  s.setLineDash([]);
+  s.fillStyle='rgba(255,79,79,.55)';
+  s.font=`${18}px DM Mono,monospace`;
+  s.fillText('flood level', W-160, fy-6);
+})();
+
+// ══════════════════════════════════════════
+//  LIVE SIMULATION — rainfall ticks
+// ══════════════════════════════════════════
+setInterval(() => {
+  const v = Math.round(36 + Math.sin(Date.now()/9000)*9);
+  document.getElementById('s-now').textContent = v;
+}, 4000);
+
+</script>
+</body>
+</html>
