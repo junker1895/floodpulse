@@ -686,10 +686,7 @@ const map = new maplibregl.Map({
 });
 
 
-// Resize after layout settles - use multiple attempts to catch flex reflow
-setTimeout(() => map.resize(), 0);
-setTimeout(() => map.resize(), 200);
-setTimeout(() => map.resize(), 500);
+// No manual resize needed - MapLibre handles this automatically
 
 // ══════════════════════════════════════════
 //  RIVERS — PMTiles vector layer
