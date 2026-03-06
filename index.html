@@ -739,10 +739,10 @@ map.on('load', () => {
     }
   });
 
-  // Animate the dash offset
+  // Animate the dash offset — only set property if layer exists
   function animateDash() {
     dashOffset = (dashOffset - 0.15) % 8;
-    if (riversVisible) {
+    if (riversVisible && map.getLayer('rivers-dash')) {
       map.setPaintProperty('rivers-dash', 'line-dash-offset', dashOffset);
     }
     requestAnimationFrame(animateDash);
@@ -977,13 +977,8 @@ async function fetchGaugeData() {
       <div class="popup-status" style="${statusStyle[risk]}">${statusLabel[risk]}</div>
     `);
 
-    // Update river colours on map
-    if (map.getLayer('rivers-dash') && map.getLayer('rivers-base')) {
-      if (risk === 'high') {
-        map.setPaintProperty('rivers-dash', 'line-color', '#ff4545');
-        map.setPaintProperty('rivers-base', 'line-color', '#ff4545');
-      }
-    }
+    // Update river colours on map (only if high risk at any gauge)
+    // colours are updated globally after all results processed below
 
     alertData.push({ name: g.name, river: g.river, state: g.state, risk });
   });
