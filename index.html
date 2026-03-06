@@ -117,9 +117,9 @@ nav {
 @media (max-width:480px) { .clock { display:none; } }
 
 /* ── LAYOUT ── */
-.app { display:flex; height:100vh; padding-top:var(--nav-h); }
-#map { flex:1; position:relative; z-index:1; height:calc(100vh - var(--nav-h)); overflow:hidden; }
-.maplibregl-map { width:100% !important; height:100% !important; }
+.app { position:relative; height:100vh; padding-top:var(--nav-h); }
+#map { position:absolute; top:var(--nav-h); left:0; right:var(--sb-w); bottom:0; z-index:1; }
+@media(max-width:768px){ #map { right:0; } }
 .maplibregl-ctrl-attrib { display:none !important; }
 .maplibregl-ctrl-logo { display:none !important; }
 
@@ -243,11 +243,13 @@ nav {
 
 /* ── SIDEBAR ── */
 .sidebar {
+  position:absolute;
+  top:0; right:0; bottom:0;
   width:var(--sb-w);
   background:var(--panel);
   border-left:1px solid var(--border);
   display:flex; flex-direction:column;
-  overflow:hidden; flex-shrink:0; z-index:10;
+  overflow:hidden; z-index:10;
 }
 
 /* ── MOBILE BOTTOM SHEET ── */
@@ -499,9 +501,9 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
 </nav>
 
 <div class="app">
+  <canvas id="rainCanvas" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none;"></canvas>
   <!-- MAP -->
   <div id="map">
-    <canvas id="rainCanvas"></canvas>
     <div id="radarTimestamp">⏱ --:--</div>
     <div class="map-controls">
       <div class="mc-btn" onclick="map.zoomIn()" title="Zoom in">+</div>
@@ -654,6 +656,7 @@ const PMTILES_URL = 'https://pub-6f1e54035ac14471852f4b7a25bf8354.r2.dev/rivers.
 // ══════════════════════════════════════════
 //  MAP — MapLibre GL
 // ══════════════════════════════════════════
+// Map initialized after DOM settles - prevents canvas sizing issues
 const map = new maplibregl.Map({
   container: 'map',
   style: {
@@ -681,6 +684,9 @@ const map = new maplibregl.Map({
   logoPosition: 'bottom-left'
 });
 
+
+// Resize map when sidebar changes layout
+setTimeout(() => map.resize(), 100);
 
 // ══════════════════════════════════════════
 //  RIVERS — PMTiles vector layer
