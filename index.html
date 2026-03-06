@@ -665,6 +665,8 @@ const map = new maplibregl.Map({
                 'https://b.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
                 'https://c.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png'],
         tileSize: 256,
+        minzoom: 0,
+        maxzoom: 19,
         attribution: '© OpenStreetMap © CARTO'
       }
     },
@@ -682,7 +684,6 @@ const map = new maplibregl.Map({
 //  RIVERS — PMTiles vector layer
 // ══════════════════════════════════════════
 let riversVisible = true;
-let dashOffset = 0;
 
 map.on('load', () => {
   // Add PMTiles source
@@ -734,18 +735,22 @@ map.on('load', () => {
         8, ['match', ['get', 'ORD_FLOW'], 1, 3.0, 2, 2.4, 3, 1.8, 4, 1.4, 1.0],
         12, ['match', ['get', 'ORD_FLOW'], 1, 4.0, 2, 3.2, 3, 2.4, 4, 2.0, 5, 1.6, 1.2]
       ],
-      'line-dasharray': [3, 5],
-      'line-dash-offset': 0
+      'line-dasharray': [2, 4]
     }
   });
 
-  // Animate the dash offset — only set property if layer exists
+  // Animate dashes by cycling through offset dasharray patterns
+  const dashArrays = [
+    [2, 4], [1.5, 4.5], [1, 5], [0.5, 5.5],
+    [0, 6], [0.5, 5.5], [1, 5], [1.5, 4.5]
+  ];
+  let dashStep = 0;
   function animateDash() {
-    dashOffset = (dashOffset - 0.15) % 8;
+    dashStep = (dashStep + 1) % dashArrays.length;
     if (riversVisible && map.getLayer('rivers-dash')) {
-      map.setPaintProperty('rivers-dash', 'line-dash-offset', dashOffset);
+      map.setPaintProperty('rivers-dash', 'line-dasharray', dashArrays[dashStep]);
     }
-    requestAnimationFrame(animateDash);
+    setTimeout(() => requestAnimationFrame(animateDash), 80);
   }
   animateDash();
 
