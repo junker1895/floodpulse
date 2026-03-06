@@ -715,44 +715,6 @@ map.on('load', () => {
     }
   });
 
-  // Animated dash layer (variation 2 style — moving dashes on all rivers)
-  map.addLayer({
-    id: 'rivers-dash',
-    type: 'line',
-    source: 'rivers',
-    'source-layer': 'rivers',
-    paint: {
-      'line-color': '#4aa8ff',
-      'line-opacity': [
-        'interpolate', ['linear'], ['zoom'],
-        2, 0.5,
-        6, 0.7,
-        10, 0.85
-      ],
-      'line-width': [
-        'interpolate', ['linear'], ['zoom'],
-        2, ['match', ['get', 'ORD_FLOW'], 1, 1.5, 2, 1.2, 0.8],
-        8, ['match', ['get', 'ORD_FLOW'], 1, 3.0, 2, 2.4, 3, 1.8, 4, 1.4, 1.0],
-        12, ['match', ['get', 'ORD_FLOW'], 1, 4.0, 2, 3.2, 3, 2.4, 4, 2.0, 5, 1.6, 1.2]
-      ],
-      'line-dasharray': [2, 4]
-    }
-  });
-
-  // Animate dashes by cycling through offset dasharray patterns
-  const dashArrays = [
-    [2, 4], [1.5, 4.5], [1, 5], [0.5, 5.5],
-    [0, 6], [0.5, 5.5], [1, 5], [1.5, 4.5]
-  ];
-  let dashStep = 0;
-  function animateDash() {
-    dashStep = (dashStep + 1) % dashArrays.length;
-    if (riversVisible && map.getLayer('rivers-dash')) {
-      map.setPaintProperty('rivers-dash', 'line-dasharray', dashArrays[dashStep]);
-    }
-    setTimeout(() => requestAnimationFrame(animateDash), 80);
-  }
-  animateDash();
 
   // Flood zone circles (as map layers)
   const zones = [
@@ -1238,7 +1200,6 @@ function togglePill(el, layer) {
     riversVisible = layerState.rivers;
     const vis = layerState.rivers ? 'visible' : 'none';
     if (map.getLayer('rivers-base')) map.setLayoutProperty('rivers-base', 'visibility', vis);
-    if (map.getLayer('rivers-dash')) map.setLayoutProperty('rivers-dash', 'visibility', vis);
   }
   if (layer === 'zones') {
     const vis = layerState.zones ? 'visible' : 'none';
@@ -1285,7 +1246,7 @@ function loadRainViewerData() {
 }
 
 function initRadarFrames(api) {
-  // Remove old radar layers
+  // Remove old radar layers and sources
   mapFrames.forEach((f, i) => {
     if (map.getLayer(`radar-${i}`)) map.removeLayer(`radar-${i}`);
     if (map.getSource(`radar-${i}`)) map.removeSource(`radar-${i}`);
@@ -1294,15 +1255,11 @@ function initRadarFrames(api) {
   if (!api || !api.radar) return;
   mapFrames = (api.radar.past || []).concat(api.radar.nowcast || []);
 
-  // Add all frames as raster sources (hidden)
+  // Add all frames — MapLibre fetches tiles natively, no CORS issue
   mapFrames.forEach((frame, i) => {
     const url = `${api.host}${frame.path}/${RADAR_SIZE}/{z}/{x}/{y}/${RADAR_COLOR}/${RADAR_SMOOTH}_${RADAR_SNOW}.png`;
-    if (!map.getSource(`radar-${i}`)) {
-      map.addSource(`radar-${i}`, { type:'raster', tiles:[url], tileSize:256 });
-    }
-    if (!map.getLayer(`radar-${i}`)) {
-      map.addLayer({ id:`radar-${i}`, type:'raster', source:`radar-${i}`, paint:{ 'raster-opacity':0 }, layout:{ visibility:'none' } });
-    }
+    map.addSource(`radar-${i}`, { type: 'raster', tiles: [url], tileSize: 256, minzoom: 0, maxzoom: 12 });
+    map.addLayer({ id: `radar-${i}`, type: 'raster', source: `radar-${i}`, paint: { 'raster-opacity': 0 }, layout: { visibility: 'none' } });
   });
 
   animationPosition = mapFrames.length - 1;
