@@ -155,24 +155,28 @@ Thresholds derived from GloFAS historical baselines per gauge. Approximate until
 - **GitHub Pages** — free static hosting
 
 ### River flow system
-- Two GeoJSON LOD files loaded into memory:
-  - `rivers-overview.geojson` — zoom 4–8, rivers ≥ 5,000 km² upstream area, simplified geometry
-  - `rivers-detail.geojson` — zoom 9+, rivers ≥ 500 km², near-full detail
-- `minAreaForZoom()` controls segment density per zoom level — only show rivers proportional to zoom
+- Three GeoJSON LOD files loaded into memory on demand:
+  - `rivers-global.geojson` — zoom 2–5, stream order 1–3 (Amazon/Murray scale), ~3MB
+  - `rivers-regional.geojson` — zoom 6–8, stream order 1–5, ~15MB
+  - `rivers-local.geojson` — zoom 9+, stream order 1–7, ~40MB
+- `lodForZoom(zoom)` selects correct LOD — global/regional/local
+- Each LOD is fetched once and cached in memory — subsequent pans are instant local filtering
 - Screen coordinates pre-cached in `screenPtsCache` — rebuilt on moveend, never per-frame
-- `flowdir` from BOM Geofabric: 1 = WithDigitized, 2 = AgainstDigitized (reverse coords)
-- Max 400 particles, prioritised by river width (drainage area proxy)
+- HydroRIVERS geometry is already in correct flow direction — no reversal needed
+- `width` pre-calculated from `ORD_FLOW` by processing script (order 1 = widest)
+- Max 400 particles, prioritised by river width
 - No `shadowBlur` — too expensive on canvas at scale
 - River lines drawn on canvas from GeoJSON, particles animate on top
 
 ### Repo structure
 ```
 floodpulse/
-├── index.html                 # Entire frontend app
-├── rivers-overview.geojson    # BOM Geofabric major rivers (zoom 4-8)
-├── rivers-detail.geojson      # BOM Geofabric all named rivers (zoom 9+)
-├── fetch_rivers.py            # One-time script to regenerate river GeoJSON files
-└── PROJECT.md                 # This file
+├── index.html                    # Entire frontend app
+├── rivers-global.geojson         # HydroRIVERS zoom 2-5 (stream order 1-3)
+├── rivers-regional.geojson       # HydroRIVERS zoom 6-8 (stream order 1-5)
+├── rivers-local.geojson          # HydroRIVERS zoom 9+  (stream order 1-7)
+├── process_hydrorivers.py        # One-time script to regenerate river GeoJSON files
+└── PROJECT.md                    # This file
 ```
 
 ---
@@ -184,16 +188,17 @@ floodpulse/
 | GloFAS via Open-Meteo | River discharge forecasts at gauges | ✅ Live | Approximate — not real BOM gauges |
 | Open-Meteo | Hourly rainfall forecasts | ✅ Live | |
 | RainViewer | Animated radar tiles | ✅ Live | Rate limiting (429s) at high zoom |
-| BOM Geofabric V3.3 | Australian river geometry + flow direction | ✅ Pre-fetched | CORS blocked — use fetch_rivers.py |
+| BOM Geofabric V3.3 | Australian river geometry | ❌ Replaced | Switched to HydroRIVERS for global consistency |
 | Nominatim (OSM) | Address geocoding | ✅ Live | |
-| HydroRIVERS (WWF/USGS) | Global river geometry | 🔜 Future | For global expansion phase |
+| HydroRIVERS (WWF/USGS) | Global river geometry, all LODs | ✅ Live | CC BY 4.0, processed via process_hydrorivers.py |
 
-### BOM Geofabric — key facts
-- Endpoint: `https://hosting.wsapi.cloud.bom.gov.au/arcgis/rest/services/ahgf/Geofabric_V3x_All_Products/FeatureServer/5`
-- **CORS disabled** — cannot be queried from browser directly
-- Solution: run `fetch_rivers.py` locally, commit static GeoJSON files to repo
-- River geometry does not change — these files never need updating
-- Key fields: `name`, `flowdir` (1/2), `upstrdarea` (m²), `hierarchy` (Major/Minor)
+### HydroRIVERS — key facts
+- Download: https://www.hydrosheds.org/products/hydrorivers (free account required)
+- License: CC BY 4.0 — attribution required in app footer
+- Key fields: `ORD_FLOW` (stream order 1–10), `UPLAND_SKM` (upstream area km²), `LENGTH_KM`
+- Geometry is already in correct flow direction — no reversal logic needed
+- Processed locally via `process_hydrorivers.py` → three static GeoJSON files committed to repo
+- Files never need updating unless HydroRIVERS releases a new version
 
 ---
 
