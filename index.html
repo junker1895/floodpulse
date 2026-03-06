@@ -8,13 +8,12 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#06090f">
 <title>FloodWatch — Australia</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"/>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/pmtiles@3.2.1/dist/pmtiles.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
-
 :root {
   --bg:      #05080e;
   --panel:   #080d16;
@@ -120,20 +119,8 @@ nav {
 /* ── LAYOUT ── */
 .app { display:flex; height:100vh; padding-top:var(--nav-h); }
 #map { flex:1; position:relative; z-index:1; }
-
-/* ── MAP TILES ── */
-/* Dark filter only on base map tiles, NOT overlay pane tiles (radar) */
-.leaflet-tile-pane .leaflet-tile { filter:brightness(0.28) saturate(0.35) hue-rotate(195deg); }
-/* Radar overlay tiles keep full colour */
-.leaflet-overlay-pane .leaflet-tile { filter:none !important; }
-.leaflet-pane.leaflet-overlay-pane img { filter:none !important; }
-/* River tile layer and canvas never darkened */
-.river-svg-line { filter:none !important; }
-#map > canvas { filter:none !important; }
-.leaflet-riverPane-pane { filter:none !important; }
-.leaflet-container { background:#040810; }
-.leaflet-control-zoom { display:none; }
-#rainCanvas { position:absolute; inset:0; pointer-events:none; z-index:400; transition:opacity .4s; }
+.maplibregl-ctrl-attrib { display:none !important; }
+.maplibregl-ctrl-logo { display:none !important; }
 
 /* ── MAP CONTROLS ── */
 .map-controls {
@@ -239,15 +226,15 @@ nav {
 }
 
 /* ── POPUP ── */
-.leaflet-popup-content-wrapper {
+.maplibregl-popup-content {
   background:rgba(8,13,22,0.98)!important;
   border:1px solid rgba(74,168,255,.2)!important;
   border-radius:12px!important; color:var(--text)!important;
   font-family:'Outfit',sans-serif!important;
-  box-shadow:0 12px 40px rgba(0,0,0,.7), 0 0 0 1px rgba(74,168,255,.04)!important;
+  box-shadow:0 12px 40px rgba(0,0,0,.7)!important;
+  padding:13px 16px!important;
 }
-.leaflet-popup-tip { background:rgba(8,13,22,0.98)!important; }
-.leaflet-popup-content { margin:13px 16px!important; font-size:13px!important; }
+.maplibregl-popup-tip { border-top-color:rgba(8,13,22,0.98)!important; border-bottom-color:rgba(8,13,22,0.98)!important; }
 .popup-title { font-weight:700; font-size:13.5px; margin-bottom:7px; color:var(--text); }
 .popup-row { display:flex; justify-content:space-between; gap:20px; margin-bottom:4px; font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text2); }
 .popup-row span:last-child { color:var(--blue); }
@@ -351,18 +338,15 @@ nav {
   border:1px solid rgba(74,168,255,.12);
   border-radius:12px; padding:13px 14px;
 }
-.addr-title {
-  font-size:11px; font-weight:700; color:var(--blue);
-  margin-bottom:9px; letter-spacing:-.1px;
-}
+.addr-title { font-size:11px; font-weight:700; color:var(--blue); margin-bottom:9px; letter-spacing:-.1px; }
 .addr-input-row { display:flex; gap:6px; align-items:center; }
-.addr-wrap { position:relative; }
+.addr-wrap { position:relative; flex:1; }
 .addr-input {
-  flex:1; background:rgba(255,255,255,.04);
+  width:100%; background:rgba(255,255,255,.04);
   border:1px solid rgba(255,255,255,.08); border-radius:8px;
   padding:8px 11px; color:var(--text);
   font-family:'Outfit',sans-serif; font-size:12px;
-  outline:none; transition:border-color .2s; width:100%;
+  outline:none; transition:border-color .2s;
 }
 .addr-input:focus { border-color:rgba(74,168,255,.3); background:rgba(74,168,255,.03); }
 .addr-input::placeholder { color:var(--muted); }
@@ -370,55 +354,46 @@ nav {
   background:linear-gradient(135deg,#1a5cbf,#4aa8ff);
   border:none; border-radius:8px;
   padding:8px 13px; color:#fff; font-size:12px; font-weight:600;
-  cursor:pointer; transition:opacity .2s, transform .1s;
-  white-space:nowrap; font-family:'Outfit',sans-serif;
-  box-shadow:0 2px 8px rgba(74,168,255,.25);
+  cursor:pointer; transition:opacity .2s, transform .1s; white-space:nowrap;
 }
-.addr-go:hover { opacity:.9; }
+.addr-go:hover { opacity:.88; }
 .addr-go:active { transform:scale(.96); }
-.addr-go:disabled { opacity:.35; cursor:default; }
-.addr-result { margin-top:10px; border-radius:10px; padding:10px 12px; display:none; }
-.addr-result.show { display:block; }
-.addr-verdict { font-size:13px; font-weight:700; margin-bottom:4px; }
-.addr-detail { color:var(--text2); line-height:1.55; font-size:11px; }
-.addr-result.safe    { background:rgba(31,219,138,.06);  border:1px solid rgba(31,219,138,.2); }
-.addr-result.caution { background:rgba(240,180,41,.06);  border:1px solid rgba(240,180,41,.22); }
-.addr-result.danger  { background:rgba(255,69,69,.07);   border:1px solid rgba(255,69,69,.25); }
+.addr-go:disabled { opacity:.5; cursor:not-allowed; }
 .addr-suggestions {
-  position:absolute; z-index:9999;
-  background:rgba(8,13,22,0.99); border:1px solid var(--border2);
-  border-radius:10px; margin-top:4px;
-  max-height:150px; overflow-y:auto;
-  box-shadow:0 10px 30px rgba(0,0,0,.6); left:0; right:0;
+  position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:3000;
+  background:rgba(8,13,22,.99); border:1px solid var(--border2);
+  border-radius:9px; overflow:hidden;
+  box-shadow:0 8px 24px rgba(0,0,0,.6);
 }
 .addr-sug-item {
-  padding:8px 12px; cursor:pointer; font-size:11px;
-  color:var(--text2); border-bottom:1px solid var(--border);
-  transition:background .12s; font-family:'JetBrains Mono',monospace;
+  padding:9px 12px; cursor:pointer;
+  font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text2);
+  border-bottom:1px solid var(--border); transition:background .1s;
 }
 .addr-sug-item:last-child { border-bottom:none; }
 .addr-sug-item:hover { background:rgba(74,168,255,.07); color:var(--text); }
+.addr-result { display:none; margin-top:10px; border-radius:9px; padding:10px 12px; font-size:11.5px; line-height:1.6; }
+.addr-result.show { display:block; }
+.addr-result.safe    { background:rgba(31,219,138,.07); border:1px solid rgba(31,219,138,.2); }
+.addr-result.caution { background:rgba(240,180,41,.07); border:1px solid rgba(240,180,41,.2); }
+.addr-result.danger  { background:rgba(255,69,69,.08);  border:1px solid rgba(255,69,69,.2); }
+.addr-verdict { font-weight:700; margin-bottom:4px; font-size:12px; }
+.addr-detail  { color:var(--text2); font-size:11px; line-height:1.6; }
 
 /* ── ALERTS ── */
-.alert {
-  display:flex; gap:10px; padding:10px 11px; border-radius:10px;
-  border:1px solid; margin-bottom:6px; font-size:12px; line-height:1.45;
-}
+.alert { display:flex; gap:10px; padding:9px 11px; border-radius:9px; margin-bottom:7px; font-size:11.5px; }
 .alert:last-child { margin-bottom:0; }
-.alert-high { background:rgba(255,69,69,.06);   border-color:rgba(255,69,69,.22); }
-.alert-mid  { background:rgba(240,180,41,.06);  border-color:rgba(240,180,41,.22); }
-.alert-info { background:rgba(74,168,255,.05);  border-color:rgba(74,168,255,.18); }
-.a-ico { font-size:13px; flex-shrink:0; padding-top:1px; }
-.a-hd { font-weight:700; margin-bottom:2px; font-size:12px; }
-.alert-high .a-hd { color:#ff6060; }
-.alert-mid  .a-hd { color:var(--mid); }
-.alert-info .a-hd { color:var(--blue2); }
-.a-bd { color:var(--muted); font-size:10px; line-height:1.5; }
+.alert-high { background:rgba(255,69,69,.08); border:1px solid rgba(255,69,69,.2); }
+.alert-mid  { background:rgba(240,180,41,.07); border:1px solid rgba(240,180,41,.18); }
+.alert-info { background:rgba(74,168,255,.05); border:1px solid rgba(74,168,255,.12); }
+.a-ico { font-size:16px; flex-shrink:0; line-height:1.4; }
+.a-hd { font-weight:700; margin-bottom:3px; color:var(--text); }
+.a-bd { color:var(--text2); font-size:10.5px; line-height:1.5; }
 
 /* ── STATE TABS ── */
-.state-tabs { display:flex; gap:4px; flex-wrap:wrap; margin-top:6px; }
+.state-tabs { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:10px; }
 .stab {
-  flex:1; min-width:34px; padding:5px 4px;
+  padding:4px 10px; border-radius:6px; font-size:10px;
   background:rgba(255,255,255,.03); border:1px solid var(--border);
   border-radius:7px; color:var(--muted); font-family:'JetBrains Mono',monospace;
   font-size:10px; cursor:pointer; transition:all .15s; font-weight:500;
@@ -497,6 +472,9 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
   background:none; border:none; padding:0 4px; transition:color .15s;
 }
 .loc-toast-dismiss:hover { color:var(--text2); }
+
+/* ── RAIN CANVAS ── */
+#rainCanvas { position:absolute; inset:0; pointer-events:none; z-index:400; transition:opacity .4s; }
 </style>
 </head>
 <body>
@@ -523,30 +501,24 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
   <!-- MAP -->
   <div id="map">
     <canvas id="rainCanvas"></canvas>
-    <div id="radarTimestamp" style="
-      position:absolute; bottom:60px; right:16px; z-index:500;
-      background:rgba(6,9,15,0.88); border:1px solid rgba(100,180,255,0.15);
-      border-radius:8px; padding:5px 10px;
-      font-family:'JetBrains Mono',monospace; font-size:10px; color:#4aa8ff;
-      display:none; pointer-events:none;
-    ">⏱ --:--</div>
+    <div id="radarTimestamp">⏱ --:--</div>
     <div class="map-controls">
       <div class="mc-btn" onclick="map.zoomIn()" title="Zoom in">+</div>
       <div class="mc-btn" onclick="map.zoomOut()" title="Zoom out">−</div>
       <div class="mc-btn" id="locBtn" title="My location" onclick="requestLocation()">◎</div>
     </div>
     <div class="rain-readout">
-      <div class="rr-item"><div class="rr-val" id="s-now">38</div><div class="rr-lbl">mm/hr</div></div>
+      <div class="rr-item"><div class="rr-val" id="s-now">--</div><div class="rr-lbl">mm/hr</div></div>
       <div class="rr-div rr-hide-mobile"></div>
-      <div class="rr-item rr-hide-mobile"><div class="rr-val" id="s-6h">112</div><div class="rr-lbl">last 6h</div></div>
+      <div class="rr-item rr-hide-mobile"><div class="rr-val" id="s-6h">--</div><div class="rr-lbl">last 6h</div></div>
       <div class="rr-div"></div>
-      <div class="rr-item"><div class="rr-val rr-risk-high" id="s-risk">HIGH</div><div class="rr-lbl">risk</div></div>
+      <div class="rr-item"><div class="rr-val rr-risk-low" id="s-risk">--</div><div class="rr-lbl">risk</div></div>
     </div>
     <div class="layer-bar">
       <div class="layer-pill on" id="radarPill" onclick="togglePill(this,'radar')">🌧 Radar</div>
-      <div class="layer-pill on" onclick="togglePill(this,'rivers')">〰 Rivers</div>
-      <div class="layer-pill on" onclick="togglePill(this,'zones')">🌊 Zones</div>
-      <div class="layer-pill on" onclick="togglePill(this,'gauges')">📍 Gauges</div>
+      <div class="layer-pill on" id="riversPill" onclick="togglePill(this,'rivers')">〰 Rivers</div>
+      <div class="layer-pill on" id="zonesPill" onclick="togglePill(this,'zones')">🌊 Zones</div>
+      <div class="layer-pill on" id="gaugesPill" onclick="togglePill(this,'gauges')">📍 Gauges</div>
       <div class="layer-pill" id="playPill" onclick="toggleRadarPlay()">▶ Animate</div>
     </div>
     <div class="map-legend">
@@ -559,7 +531,6 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
 
   <!-- SIDEBAR / BOTTOM SHEET -->
   <div class="sidebar" id="sidebar">
-    <!-- Drag handle (mobile only) -->
     <div class="sheet-handle" id="sheetHandle">
       <div class="sheet-handle-bar"></div>
     </div>
@@ -573,15 +544,15 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
         <button class="v-loc-btn" onclick="requestLocation()">Update</button>
       </div>
       <div class="v-main">
-        <div class="v-icon" id="verdictIcon" style="background:rgba(255,79,79,.13)">⚠️</div>
+        <div class="v-icon" id="verdictIcon" style="background:rgba(31,219,138,.08)">✅</div>
         <div>
-          <div class="v-status" id="verdictStatus" style="color:#ff6060">HIGH FLOOD RISK</div>
-          <div class="v-sub" id="verdictSub">Rivers rising rapidly. Avoid low-lying roads near waterways.</div>
+          <div class="v-status" id="verdictStatus" style="color:#22d98a">Loading…</div>
+          <div class="v-sub" id="verdictSub">Fetching live river conditions.</div>
         </div>
       </div>
       <div class="risk-track"></div>
       <div class="risk-needle-wrap">
-        <div class="risk-needle" id="needle" style="left:78%"></div>
+        <div class="risk-needle" id="needle" style="left:5%"></div>
       </div>
       <div class="risk-lbls"><span>LOW</span><span>MODERATE</span><span>HIGH</span></div>
     </div>
@@ -591,14 +562,14 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
       <div class="sb-section">
         <div class="addr-checker">
           <div class="addr-title">🏠 Is my address safe?</div>
-          <div class="addr-wrap">
-            <div class="addr-input-row">
+          <div class="addr-input-row">
+            <div class="addr-wrap">
               <input class="addr-input" id="addrInput" type="text"
                 placeholder="Enter any Australian address…"
                 oninput="addrDebounce()" onkeydown="if(event.key==='Enter')checkAddress()"/>
-              <button class="addr-go" id="addrBtn" onclick="checkAddress()">Check</button>
+              <div class="addr-suggestions" id="addrSuggestions" style="display:none"></div>
             </div>
-            <div class="addr-suggestions" id="addrSuggestions" style="display:none"></div>
+            <button class="addr-go" id="addrBtn" onclick="checkAddress()">Check</button>
           </div>
           <div class="addr-result" id="addrResult">
             <div class="addr-verdict" id="addrVerdict"></div>
@@ -607,7 +578,7 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
         </div>
       </div>
 
-      <!-- ALERTS — dynamic -->
+      <!-- ALERTS -->
       <div class="sb-section">
         <div class="sb-title">Flood Status</div>
         <div id="alertsContainer">
@@ -621,7 +592,7 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
         </div>
       </div>
 
-      <!-- GAUGES — national, state tabs -->
+      <!-- GAUGES -->
       <div class="sb-section" style="padding-bottom:0">
         <div class="sb-title">River Gauges</div>
         <div class="state-tabs" id="stateTabs">
@@ -634,7 +605,7 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
         </div>
       </div>
       <div class="sb-section" style="padding-top:6px">
-        <div id="gaugeList"><!-- rendered by JS --></div>
+        <div id="gaugeList"></div>
       </div>
 
       <!-- TIMELINE -->
@@ -646,13 +617,13 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
     </div>
 
     <div class="sb-foot">
-      <span>Open-Meteo · GloFAS · RainViewer · OpenStreetMap</span>
+      <span>Open-Meteo · GloFAS · RainViewer · HydroRIVERS</span>
       <a>Sources ↗</a>
     </div>
   </div>
 </div>
 
-<!-- Location permission toast -->
+<!-- Location toast -->
 <div class="loc-toast" id="locToast">
   <span>📍 Show flood risk at your location?</span>
   <button class="loc-toast-btn" onclick="requestLocation()">Allow</button>
@@ -672,352 +643,243 @@ function tick() {
 tick(); setInterval(tick, 30000);
 
 // ══════════════════════════════════════════
-//  MAP
+//  PMTILES PROTOCOL REGISTRATION
 // ══════════════════════════════════════════
-const map = L.map('map', {
-  center: [-25.5, 134.0], zoom: 4,
-  zoomControl: false, attributionControl: false
+const protocol = new pmtiles.Protocol();
+maplibregl.addProtocol('pmtiles', protocol.tile.bind(protocol));
+
+const PMTILES_URL = 'https://pub-109025e1b1dd0b1250725135f2df303f.r2.dev/rivers.pmtiles';
+
+// ══════════════════════════════════════════
+//  MAP — MapLibre GL
+// ══════════════════════════════════════════
+const map = new maplibregl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+    sources: {
+      'carto-dark': {
+        type: 'raster',
+        tiles: ['https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
+                'https://b.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
+                'https://c.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png'],
+        tileSize: 256,
+        attribution: '© OpenStreetMap © CARTO'
+      }
+    },
+    layers: [{ id: 'background', type: 'raster', source: 'carto-dark' }]
+  },
+  center: [134.0, -25.5],
+  zoom: 4,
+  minZoom: 2,
+  maxZoom: 18,
+  attributionControl: false,
+  logoPosition: 'bottom-left'
 });
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:18 }).addTo(map);
-
-// Custom pane for river SVG lines — sits above tiles, below markers, no dark filter
-map.createPane('riverPane');
-map.getPane('riverPane').style.zIndex = 300;
-map.getPane('riverPane').style.filter = 'none';
-L.control.attribution({ position:'bottomleft', prefix:false })
-  .addAttribution('<span style="color:#4a6080;font-size:9px;font-family:monospace">© OpenStreetMap</span>')
-  .addTo(map);
-
-// Flood zones
-const zones = [
-  { lat:-27.51, lng:152.87, r:9000, risk:'high' },
-  { lat:-27.46, lng:152.57, r:7000, risk:'mid'  },
-  { lat:-26.97, lng:152.33, r:5500, risk:'mid'  },
-  { lat:-27.64, lng:152.58, r:4500, risk:'low'  },
-  { lat:-27.19, lng:152.83, r:4000, risk:'low'  },
-];
-const riskColor = { high:'#ff4f4f', mid:'#f5c542', low:'#22d98a' };
-const zoneCircles = zones.map(z => L.circle([z.lat,z.lng], {
-  radius:z.r, color:riskColor[z.risk], fillColor:riskColor[z.risk],
-  fillOpacity:.12, weight:1.5, opacity:.45,
-  dashArray: z.risk==='low' ? '4,6' : null
-}).addTo(map));
 
 // ══════════════════════════════════════════
-//  RIVER FLOW SYSTEM
-//  Embedded coordinates (source→mouth)
-//  SVG lines via Leaflet pane (zoom-stable)
-//  Canvas particles anchored to map coords
+//  RIVERS — PMTiles vector layer
 // ══════════════════════════════════════════
+let riversVisible = true;
+let dashOffset = 0;
 
-// River coords removed — BOM Geofabric feature service used instead
-
-
-function setRiverTileOpacity() { /* tile layer removed */ }
-function buildRiverSVG() { /* no-op */ }
-
-// ══════════════════════════════════════════
-//  FLOW PARTICLES
-//  Geometry + flow direction from BOM Geofabric
-//  FeatureServer layer 5: AHGFNetworkStream - Major, Named
-//  flowdir: 1=WithDigitized, 2=AgainstDigitized
-// ══════════════════════════════════════════
-const RIVERS_LOD = {
-  global:   './rivers-global.geojson',    // zoom 2-5,  stream order 1-3 (major rivers)
-  regional: './rivers-regional.geojson',  // zoom 6-8,  stream order 1-5
-  local:    './rivers-local.geojson',     // zoom 9+,   stream order 1-7
-};
-
-function lodForZoom(zoom) {
-  if (zoom >= 9) return 'local';
-  if (zoom >= 6) return 'regional';
-  return 'global';
-}
-
-let riverParticles   = [];
-let riverSegments    = [];
-let riskColorMap     = {};
-let particleVisible  = true;
-let riverCache       = { global: null, regional: null, local: null };
-let currentLOD       = null;
-
-// Canvas — absolute inside #map, never filtered
-const riverCanvas = document.createElement('canvas');
-riverCanvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:450;';
-document.getElementById('map').appendChild(riverCanvas);
-const riverCtx = riverCanvas.getContext('2d');
-
-function resizeRiverCanvas() {
-  const el = document.getElementById('map');
-  riverCanvas.width  = el.offsetWidth;
-  riverCanvas.height = el.offsetHeight;
-}
-resizeRiverCanvas();
-window.addEventListener('resize', resizeRiverCanvas);
-map.on('resize', resizeRiverCanvas);
-
-async function loadLOD(lod) {
-  if (riverCache[lod]) return riverCache[lod];
-  try {
-    const url = RIVERS_LOD[lod];
-    console.log('[Rivers] Fetching', url);
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error(resp.status + ' ' + url);
-    const data = await resp.json();
-    riverCache[lod] = data.features || [];
-    console.log('[Rivers] Loaded LOD:', lod, '—', riverCache[lod].length, 'features');
-    return riverCache[lod];
-  } catch (e) {
-    console.warn('[Rivers] LOD load failed:', e.message);
-    return [];
-  }
-}
-
-async function fetchRiverSegments() {
-  const zoom = map.getZoom();
-  if (zoom < 2) {
-    riverSegments = [];
-    riverParticles = [];
-    return;
-  }
-
-  const lod      = lodForZoom(zoom);
-  const features = await loadLOD(lod);
-  if (!features.length) return;
-
-  currentLOD = lod;
-
-  const b   = map.getBounds();
-  const w   = b.getWest(), s = b.getSouth(), e = b.getEast(), n = b.getNorth();
-  const pad = 0.2;
-
-  riverSegments = [];
-  features.forEach(f => {
-    const props = f.properties || {};
-    const geom  = f.geometry;
-    if (!geom) return;
-
-    // HydroRIVERS: width pre-calculated by process_hydrorivers.py from ORD_FLOW
-    // order 1 = largest rivers, 7 = smallest included
-    const width = props.width || 1;
-    const order = props.order || 5;
-    const color = '#4aa8ff';  // risk colouring added in future when gauges are matched globally
-
-    const lines = geom.type === 'MultiLineString' ? geom.coordinates : [geom.coordinates];
-    lines.forEach(coords => {
-      if (coords.length < 2) return;
-      const inView = coords.some(c =>
-        c[0] >= w-pad && c[0] <= e+pad && c[1] >= s-pad && c[1] <= n+pad
-      );
-      if (!inView) return;
-      // HydroRIVERS geometry is already in correct flow direction
-      riverSegments.push({ pts: coords, color, width, order });
-    });
+map.on('load', () => {
+  // Add PMTiles source
+  map.addSource('rivers', {
+    type: 'vector',
+    url: `pmtiles://${PMTILES_URL}`,
   });
 
-  console.log('[Rivers] zoom:', zoom, 'lod:', lod, 'segments:', riverSegments.length);
-  rebuildParticles();
-}
-
-function matchRiverColor(name) {
-  if (!name) return '#4aa8ff';
-  const n = name.toLowerCase();
-  const key = Object.keys(riskColorMap).find(k => n.includes(k.toLowerCase()));
-  return key ? riskColorMap[key] : '#4aa8ff';
-}
-
-// Pre-convert segment geo coords → screen px cache
-// Rebuilt on moveend/zoomend alongside rebuildParticles
-let screenPtsCache = [];
-
-function buildScreenCache() {
-  screenPtsCache = riverSegments.map(seg =>
-    seg.pts.map(c => {
-      const p = map.latLngToContainerPoint(L.latLng(c[1], c[0]));
-      return { x: p.x, y: p.y };
-    })
-  );
-}
-
-const MAX_PARTICLES = 400;
-
-function rebuildParticles() {
-  riverParticles = [];
-  if (!particleVisible) return;
-  buildScreenCache();
-
-  // One particle per segment, prioritise largest rivers
-  const indexed = riverSegments
-    .map((seg, si) => ({ si, seg }))
-    .sort((a, b) => b.seg.width - a.seg.width);
-
-  for (const { si, seg } of indexed) {
-    if (riverParticles.length >= MAX_PARTICLES) break;
-    const sPts = screenPtsCache[si];
-    if (!sPts || sPts.length < 2) continue;
-    riverParticles.push({
-      si,
-      t: Math.random(),
-      speed: 0.0014 + Math.random() * 0.0008,
-      size: Math.max(2, seg.width * 1.4),
-      alpha: 0.85 + Math.random() * 0.15,
-    });
-  }
-}
-
-// Rebuild screen cache on pan (coords shift) without full particle rebuild
-map.on('move', () => { buildScreenCache(); });
-
-function ptAtT(sPts, t) {
-  let total = 0;
-  const lens = [];
-  for (let i = 1; i < sPts.length; i++) {
-    const dx = sPts[i].x - sPts[i-1].x, dy = sPts[i].y - sPts[i-1].y;
-    lens.push(Math.sqrt(dx*dx + dy*dy));
-    total += lens[lens.length-1];
-  }
-  if (total === 0) return { x: sPts[0].x, y: sPts[0].y, angle: 0 };
-  let target = t * total, walked = 0;
-  for (let i = 0; i < lens.length; i++) {
-    if (walked + lens[i] >= target) {
-      const f = (target - walked) / lens[i];
-      const dx = sPts[i+1].x - sPts[i].x, dy = sPts[i+1].y - sPts[i].y;
-      return { x: sPts[i].x + dx*f, y: sPts[i].y + dy*f, angle: Math.atan2(dy, dx) };
+  // Base river line (always on)
+  map.addLayer({
+    id: 'rivers-base',
+    type: 'line',
+    source: 'rivers',
+    'source-layer': 'rivers',
+    paint: {
+      'line-color': '#4aa8ff',
+      'line-opacity': [
+        'interpolate', ['linear'], ['zoom'],
+        2, 0.15,
+        6, 0.30,
+        10, 0.45
+      ],
+      'line-width': [
+        'interpolate', ['linear'], ['zoom'],
+        2, ['match', ['get', 'ORD_FLOW'], 1, 1.5, 2, 1.2, 3, 1.0, 4, 0.8, 0.5],
+        8, ['match', ['get', 'ORD_FLOW'], 1, 3.5, 2, 2.8, 3, 2.2, 4, 1.8, 5, 1.4, 1.0],
+        12, ['match', ['get', 'ORD_FLOW'], 1, 5.0, 2, 4.0, 3, 3.0, 4, 2.4, 5, 2.0, 6, 1.5, 1.2]
+      ]
     }
-    walked += lens[i];
+  });
+
+  // Animated dash layer (variation 2 style — moving dashes on all rivers)
+  map.addLayer({
+    id: 'rivers-dash',
+    type: 'line',
+    source: 'rivers',
+    'source-layer': 'rivers',
+    paint: {
+      'line-color': '#4aa8ff',
+      'line-opacity': [
+        'interpolate', ['linear'], ['zoom'],
+        2, 0.5,
+        6, 0.7,
+        10, 0.85
+      ],
+      'line-width': [
+        'interpolate', ['linear'], ['zoom'],
+        2, ['match', ['get', 'ORD_FLOW'], 1, 1.5, 2, 1.2, 0.8],
+        8, ['match', ['get', 'ORD_FLOW'], 1, 3.0, 2, 2.4, 3, 1.8, 4, 1.4, 1.0],
+        12, ['match', ['get', 'ORD_FLOW'], 1, 4.0, 2, 3.2, 3, 2.4, 4, 2.0, 5, 1.6, 1.2]
+      ],
+      'line-dasharray': [3, 5],
+      'line-dash-offset': 0
+    }
+  });
+
+  // Animate the dash offset
+  function animateDash() {
+    dashOffset = (dashOffset - 0.15) % 8;
+    if (riversVisible) {
+      map.setPaintProperty('rivers-dash', 'line-dash-offset', dashOffset);
+    }
+    requestAnimationFrame(animateDash);
   }
-  const last = sPts[sPts.length-1];
-  return { x: last.x, y: last.y, angle: 0 };
-}
+  animateDash();
 
-function drawRiverLines() {
-  const zoom      = map.getZoom();
-  const baseAlpha = Math.min(0.5, 0.12 + (zoom - 2) * 0.05);
-  riverSegments.forEach((seg, si) => {
-    const sPts = screenPtsCache[si];
-    if (!sPts || sPts.length < 2) return;
-    riverCtx.beginPath();
-    riverCtx.moveTo(sPts[0].x, sPts[0].y);
-    for (let i = 1; i < sPts.length; i++) riverCtx.lineTo(sPts[i].x, sPts[i].y);
-    riverCtx.strokeStyle = seg.color;
-    riverCtx.lineWidth   = seg.width;
-    riverCtx.globalAlpha = baseAlpha;
-    riverCtx.stroke();
+  // Flood zone circles (as map layers)
+  const zones = [
+    { id:'z1', center:[152.87,-27.51], radius:9000, risk:'high' },
+    { id:'z2', center:[152.57,-27.46], radius:7000, risk:'mid'  },
+    { id:'z3', center:[152.33,-26.97], radius:5500, risk:'mid'  },
+    { id:'z4', center:[152.58,-27.64], radius:4500, risk:'low'  },
+    { id:'z5', center:[152.83,-27.19], radius:4000, risk:'low'  },
+  ];
+  const riskColor = { high:'#ff4545', mid:'#f0b429', low:'#1fdb8a' };
+
+  // Add zone circles using GeoJSON
+  const zoneFeatures = zones.map(z => {
+    const [lng, lat] = z.center;
+    const r = z.radius;
+    const points = 64;
+    const coords = [];
+    for (let i = 0; i <= points; i++) {
+      const angle = (i / points) * 2 * Math.PI;
+      const dx = r / 111320;
+      const dy = r / (111320 * Math.cos(lat * Math.PI / 180));
+      coords.push([lng + dy * Math.sin(angle), lat + dx * Math.cos(angle)]);
+    }
+    return {
+      type: 'Feature',
+      properties: { risk: z.risk, color: riskColor[z.risk] },
+      geometry: { type: 'Polygon', coordinates: [coords] }
+    };
   });
-}
 
-function tickRiverParticles() {
-  const W = riverCanvas.width, H = riverCanvas.height;
-  riverCtx.clearRect(0, 0, W, H);
-  if (!particleVisible) { requestAnimationFrame(tickRiverParticles); return; }
-
-  // Draw river lines first, particles on top
-  riverCtx.save();
-  riverCtx.globalAlpha = 1;
-  riverCtx.lineJoin = 'round';
-  riverCtx.lineCap  = 'round';
-  drawRiverLines();
-  riverCtx.restore();
-
-  // Draw particles
-  riverParticles.forEach(p => {
-    const seg  = riverSegments[p.si];
-    const sPts = screenPtsCache[p.si];
-    if (!seg || !sPts || sPts.length < 2) return;
-    p.t += p.speed;
-    if (p.t >= 1) p.t = 0;
-    const pos = ptAtT(sPts, p.t);
-    if (pos.x < -20 || pos.x > W+20 || pos.y < -20 || pos.y > H+20) return;
-    const color = matchRiverColor(seg.name);
-    riverCtx.save();
-    riverCtx.globalAlpha = p.alpha;
-    riverCtx.fillStyle = color;
-    riverCtx.translate(pos.x, pos.y);
-    riverCtx.rotate(pos.angle);
-    riverCtx.beginPath();
-    riverCtx.ellipse(0, 0, p.size * 2.2, p.size * 0.6, 0, 0, Math.PI * 2);
-    riverCtx.fill();
-    riverCtx.restore();
+  map.addSource('zones', {
+    type: 'geojson',
+    data: { type: 'FeatureCollection', features: zoneFeatures }
   });
-  requestAnimationFrame(tickRiverParticles);
-}
+  map.addLayer({
+    id: 'zones-fill',
+    type: 'fill',
+    source: 'zones',
+    paint: {
+      'fill-color': ['get', 'color'],
+      'fill-opacity': 0.10
+    }
+  });
+  map.addLayer({
+    id: 'zones-line',
+    type: 'line',
+    source: 'zones',
+    paint: {
+      'line-color': ['get', 'color'],
+      'line-opacity': 0.4,
+      'line-width': 1.5
+    }
+  });
 
-// Filter viewport on move — instant since data is local
-map.on('moveend', fetchRiverSegments);
-map.on('zoomend', fetchRiverSegments);
+  // Place gauge markers after map loads
+  placeGaugeMarkers();
 
-// Load rivers after map is ready
-map.whenReady(() => setTimeout(fetchRiverSegments, 500));
-requestAnimationFrame(tickRiverParticles);
-
-// Called when gauge risk data loads
-function updateRiverColors(nameColorMap) {
-  riskColorMap = nameColorMap;
-  // Colors update live on next tick — no rebuild needed
-}
+  // Radar after map loads
+  loadRainViewerData();
+});
 
 // ══════════════════════════════════════════
-//  GAUGE CONFIG — coords + metadata
-//  River discharge from Open-Meteo Flood API
-//  Normal flow ranges derived from GloFAS baselines
+//  GAUGE CONFIG
 // ══════════════════════════════════════════
-// ── National gauge network — 30 sites across 6 states ──
-// GloFAS thresholds estimated from historical peak flows
 const gaugeConfig = [
-  // QLD
-  { state:'QLD', lat:-27.51, lng:152.87, name:'Colleges Crossing', river:'Bremer R.',      normalMin:5,   floodThreshold:300  },
-  { state:'QLD', lat:-27.46, lng:152.57, name:'Lowood',            river:'Brisbane R.',    normalMin:10,  floodThreshold:800  },
-  { state:'QLD', lat:-26.97, lng:152.33, name:'Kilcoy',            river:'Stanley R.',     normalMin:2,   floodThreshold:160  },
-  { state:'QLD', lat:-27.64, lng:152.58, name:'Rosewood',          river:'Bremer R.',      normalMin:1,   floodThreshold:100  },
-  { state:'QLD', lat:-27.19, lng:152.83, name:'Dayboro',           river:'N. Pine R.',     normalMin:1,   floodThreshold:80   },
-  { state:'QLD', lat:-19.26, lng:146.82, name:'Townsville',        river:'Ross R.',        normalMin:1,   floodThreshold:120  },
-  { state:'QLD', lat:-16.92, lng:145.77, name:'Cairns',            river:'Barron R.',      normalMin:5,   floodThreshold:400  },
-  { state:'QLD', lat:-23.38, lng:150.51, name:'Rockhampton',       river:'Fitzroy R.',     normalMin:50,  floodThreshold:2500 },
-  { state:'QLD', lat:-26.56, lng:148.60, name:'Roma',              river:'Maranoa R.',     normalMin:1,   floodThreshold:500  },
-  // NSW
-  { state:'NSW', lat:-31.95, lng:115.86, name:'Windsor',           river:'Hawkesbury R.',  normalMin:5,   floodThreshold:1200 },
-  { state:'NSW', lat:-33.74, lng:150.67, name:'Penrith',           river:'Nepean R.',      normalMin:5,   floodThreshold:600  },
-  { state:'NSW', lat:-29.68, lng:152.93, name:'Grafton',           river:'Clarence R.',    normalMin:20,  floodThreshold:3000 },
-  { state:'NSW', lat:-30.08, lng:148.01, name:'Bourke',            river:'Darling R.',     normalMin:10,  floodThreshold:800  },
-  { state:'NSW', lat:-35.12, lng:147.36, name:'Wagga Wagga',       river:'Murrumbidgee R.',normalMin:15,  floodThreshold:1500 },
-  { state:'NSW', lat:-32.24, lng:148.59, name:'Dubbo',             river:'Macquarie R.',   normalMin:5,   floodThreshold:700  },
-  { state:'NSW', lat:-28.81, lng:153.28, name:'Lismore',           river:'Wilson R.',      normalMin:3,   floodThreshold:500  },
-  // VIC
-  { state:'VIC', lat:-37.82, lng:144.95, name:'Melbourne',         river:'Yarra R.',       normalMin:5,   floodThreshold:300  },
-  { state:'VIC', lat:-36.36, lng:145.40, name:'Shepparton',        river:'Goulburn R.',    normalMin:10,  floodThreshold:900  },
-  { state:'VIC', lat:-36.14, lng:146.91, name:'Wodonga',           river:'Murray R.',      normalMin:50,  floodThreshold:2000 },
-  { state:'VIC', lat:-38.22, lng:146.42, name:'Traralgon',         river:'Latrobe R.',     normalMin:3,   floodThreshold:400  },
-  { state:'VIC', lat:-37.56, lng:143.86, name:'Ballarat',          river:'Yarrowee R.',    normalMin:1,   floodThreshold:80   },
-  // WA
-  { state:'WA',  lat:-31.95, lng:115.86, name:'Perth (Swan R.)',   river:'Swan R.',        normalMin:2,   floodThreshold:350  },
-  { state:'WA',  lat:-33.33, lng:115.64, name:'Busselton',         river:'Vasse R.',       normalMin:1,   floodThreshold:60   },
-  { state:'WA',  lat:-17.96, lng:122.24, name:'Broome',            river:'Dampier Ck.',    normalMin:0,   floodThreshold:200  },
-  { state:'WA',  lat:-20.31, lng:118.58, name:'Port Hedland',      river:'De Grey R.',     normalMin:0,   floodThreshold:800  },
-  // SA
-  { state:'SA',  lat:-34.93, lng:138.60, name:'Adelaide',          river:'Torrens R.',     normalMin:0,   floodThreshold:60   },
-  { state:'SA',  lat:-34.10, lng:140.75, name:'Renmark',           river:'Murray R.',      normalMin:100, floodThreshold:1800 },
-  { state:'SA',  lat:-37.83, lng:140.78, name:'Mt Gambier',        river:'Glenelg R.',     normalMin:1,   floodThreshold:120  },
-  // NT
-  { state:'NT',  lat:-12.46, lng:130.84, name:'Darwin',            river:'Elizabeth R.',   normalMin:0,   floodThreshold:300  },
-  { state:'NT',  lat:-13.72, lng:136.18, name:'Katherine',         river:'Katherine R.',   normalMin:2,   floodThreshold:2000 },
+  { state:'QLD', lat:-27.51, lng:152.87, name:'Colleges Crossing', river:'Bremer R.',       normalMin:5,   floodThreshold:300  },
+  { state:'QLD', lat:-27.46, lng:152.57, name:'Lowood',            river:'Brisbane R.',     normalMin:10,  floodThreshold:800  },
+  { state:'QLD', lat:-26.97, lng:152.33, name:'Kilcoy',            river:'Stanley R.',      normalMin:2,   floodThreshold:160  },
+  { state:'QLD', lat:-27.64, lng:152.58, name:'Rosewood',          river:'Bremer R.',       normalMin:1,   floodThreshold:100  },
+  { state:'QLD', lat:-27.19, lng:152.83, name:'Dayboro',           river:'N. Pine R.',      normalMin:1,   floodThreshold:80   },
+  { state:'QLD', lat:-19.26, lng:146.82, name:'Townsville',        river:'Ross R.',         normalMin:1,   floodThreshold:120  },
+  { state:'QLD', lat:-16.92, lng:145.77, name:'Cairns',            river:'Barron R.',       normalMin:5,   floodThreshold:400  },
+  { state:'QLD', lat:-23.38, lng:150.51, name:'Rockhampton',       river:'Fitzroy R.',      normalMin:50,  floodThreshold:2500 },
+  { state:'QLD', lat:-26.56, lng:148.60, name:'Roma',              river:'Maranoa R.',      normalMin:1,   floodThreshold:500  },
+  { state:'NSW', lat:-33.61, lng:150.74, name:'Windsor',           river:'Hawkesbury R.',   normalMin:5,   floodThreshold:1200 },
+  { state:'NSW', lat:-33.74, lng:150.67, name:'Penrith',           river:'Nepean R.',       normalMin:5,   floodThreshold:600  },
+  { state:'NSW', lat:-29.68, lng:152.93, name:'Grafton',           river:'Clarence R.',     normalMin:20,  floodThreshold:3000 },
+  { state:'NSW', lat:-30.08, lng:148.01, name:'Bourke',            river:'Darling R.',      normalMin:10,  floodThreshold:800  },
+  { state:'NSW', lat:-35.12, lng:147.36, name:'Wagga Wagga',       river:'Murrumbidgee R.', normalMin:15,  floodThreshold:1500 },
+  { state:'NSW', lat:-32.24, lng:148.59, name:'Dubbo',             river:'Macquarie R.',    normalMin:5,   floodThreshold:700  },
+  { state:'NSW', lat:-28.81, lng:153.28, name:'Lismore',           river:'Wilson R.',       normalMin:3,   floodThreshold:500  },
+  { state:'VIC', lat:-37.82, lng:144.95, name:'Melbourne',         river:'Yarra R.',        normalMin:5,   floodThreshold:300  },
+  { state:'VIC', lat:-36.36, lng:145.40, name:'Shepparton',        river:'Goulburn R.',     normalMin:10,  floodThreshold:900  },
+  { state:'VIC', lat:-36.14, lng:146.91, name:'Wodonga',           river:'Murray R.',       normalMin:50,  floodThreshold:2000 },
+  { state:'VIC', lat:-38.22, lng:146.42, name:'Traralgon',         river:'Latrobe R.',      normalMin:3,   floodThreshold:400  },
+  { state:'VIC', lat:-37.56, lng:143.86, name:'Ballarat',          river:'Yarrowee R.',     normalMin:1,   floodThreshold:80   },
+  { state:'WA',  lat:-31.95, lng:115.86, name:'Perth (Swan R.)',   river:'Swan R.',         normalMin:2,   floodThreshold:350  },
+  { state:'WA',  lat:-33.33, lng:115.64, name:'Busselton',         river:'Vasse R.',        normalMin:1,   floodThreshold:60   },
+  { state:'WA',  lat:-17.96, lng:122.24, name:'Broome',            river:'Dampier Ck.',     normalMin:0,   floodThreshold:200  },
+  { state:'WA',  lat:-20.31, lng:118.58, name:'Port Hedland',      river:'De Grey R.',      normalMin:0,   floodThreshold:800  },
+  { state:'SA',  lat:-34.93, lng:138.60, name:'Adelaide',          river:'Torrens R.',      normalMin:0,   floodThreshold:60   },
+  { state:'SA',  lat:-34.10, lng:140.75, name:'Renmark',           river:'Murray R.',       normalMin:100, floodThreshold:1800 },
+  { state:'SA',  lat:-37.83, lng:140.78, name:'Mt Gambier',        river:'Glenelg R.',      normalMin:1,   floodThreshold:120  },
+  { state:'NT',  lat:-12.46, lng:130.84, name:'Darwin',            river:'Elizabeth R.',    normalMin:0,   floodThreshold:300  },
+  { state:'NT',  lat:-13.72, lng:136.18, name:'Katherine',         river:'Katherine R.',    normalMin:2,   floodThreshold:2000 },
 ];
 
-// active state filter
 let activeState = 'QLD';
+const gaugeCache = {};
+const gaugeMarkers = [];
+const gaugePopups = [];
+
+function placeGaugeMarkers() {
+  gaugeConfig.forEach((g, i) => {
+    const el = document.createElement('div');
+    el.className = 'fw-marker low';
+    el.id = `marker-${i}`;
+    el.textContent = '~';
+
+    const popup = new maplibregl.Popup({ offset: 18, maxWidth: '240px' })
+      .setHTML(`<div class="popup-title">📍 ${g.name}</div><div style="color:var(--muted);font-size:11px;font-family:'JetBrains Mono',monospace">${g.state} · ${g.river}<br>Loading…</div>`);
+
+    const marker = new maplibregl.Marker({ element: el })
+      .setLngLat([g.lng, g.lat])
+      .setPopup(popup)
+      .addTo(map);
+
+    gaugeMarkers.push(marker);
+    gaugePopups.push(popup);
+  });
+}
 
 function switchState(state, btn) {
   activeState = state;
   document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-
-  // Fly map to state centre
   const centres = {
     QLD:[-22.5, 144.0, 6], NSW:[-32.0, 147.0, 6], VIC:[-36.8, 144.5, 6],
     WA: [-25.0, 121.0, 5], SA: [-30.0, 135.5, 6], NT: [-19.0, 133.5, 6]
   };
   const [lat, lng, zoom] = centres[state];
-  map.flyTo([lat, lng], zoom, { duration: 1.2 });
-
+  map.flyTo({ center: [lng, lat], zoom, duration: 1200 });
   renderGaugeList();
 }
 
@@ -1028,74 +890,45 @@ function renderGaugeList() {
   gaugeConfig.forEach((g, i) => {
     if (g.state !== activeState) return;
     const cached = gaugeCache[i];
-    const risk  = cached ? cached.risk : 'low';
-    const pct   = cached ? cached.pct  : 0;
+    const risk  = cached ? cached.risk  : 'low';
+    const pct   = cached ? cached.pct   : 0;
     const lvl   = cached ? cached.discharge.toFixed(0)+' m³/s' : '—';
     const rate  = cached ? cached.rateStr : '…';
     const trend = cached ? cached.trend : '➡';
-    const riskColor = { high:'#ff4f4f', mid:'#f5c542', low:'#22d98a' }[risk];
+    const rc2   = { high:'#ff4f4f', mid:'#f5c542', low:'#22d98a' }[risk];
     const base  = { high:'255,79,79', mid:'245,197,66', low:'34,217,138' }[risk];
-
     const el = document.createElement('div');
-    el.className = 'gauge' + (i === 0 && activeState === 'QLD' ? ' sel' : '');
+    el.className = 'gauge';
     el.setAttribute('onclick', `focusGauge(this,${g.lat},${g.lng})`);
     el.innerHTML = `
       <div class="g-ico" style="background:rgba(${base},.1)">🌊</div>
       <div class="g-info">
         <div class="g-name">${g.name} <span style="color:var(--muted);font-size:9px">${g.river}</span></div>
-        <div class="g-bar-row"><div class="g-bar"><div class="g-fill" style="width:${pct}%;background:${riskColor}"></div></div><div class="g-pct" style="color:${riskColor}">${pct}%</div></div>
+        <div class="g-bar-row"><div class="g-bar"><div class="g-fill" style="width:${pct}%;background:${rc2}"></div></div><div class="g-pct" style="color:${rc2}">${pct}%</div></div>
       </div>
       <div class="g-trend">${trend}</div>
-      <div class="g-lvl" style="color:${riskColor}"><span class="gv">${lvl}</span><span class="gu">${rate}</span></div>`;
+      <div class="g-lvl" style="color:${rc2}"><span class="gv">${lvl}</span><span class="gu">${rate}</span></div>`;
     list.appendChild(el);
   });
 }
-
-// Cache for gauge data keyed by index
-const gaugeCache = {};
-
-const statusStyle = {
-  high:'background:rgba(255,79,79,.15);color:#ff6b6b;',
-  mid: 'background:rgba(245,197,66,.12);color:#f5c542;',
-  low: 'background:rgba(34,217,138,.1);color:#22d98a;'
-};
-const statusLabel = { high:'⚠ High Risk — Rising', mid:'~ Moderate — Monitor', low:'✓ Low — Normal' };
-
-// Markers array so we can update popups after data loads
-const gaugeMarkers = [];
-
-// Place markers for ALL gauges nationally
-gaugeConfig.forEach((g, i) => {
-  const icon = L.divIcon({
-    className:'',
-    html:`<div class="fw-marker low" id="marker-${i}">~</div>`,
-    iconSize:[30,30], iconAnchor:[15,15], popupAnchor:[0,-18]
-  });
-  const m = L.marker([g.lat,g.lng], { icon }).addTo(map);
-  m.bindPopup(`<div class="popup-title">📍 ${g.name}</div><div style="color:var(--muted);font-size:11px;font-family:'JetBrains Mono',monospace">${g.state} · ${g.river}<br>Loading live data…</div>`, { maxWidth:220 });
-  gaugeMarkers.push(m);
-});
-
-// Initial render of gauge list
 renderGaugeList();
 
 // ══════════════════════════════════════════
-//  OPEN-METEO FLOOD API — fetch all gauges
+//  GAUGE DATA — Open-Meteo Flood API
 // ══════════════════════════════════════════
-function classifyRisk(discharge, cfg) {
-  if (discharge >= cfg.floodThreshold * 0.75) return 'high';
-  if (discharge >= cfg.floodThreshold * 0.35) return 'mid';
+function classifyRisk(d, cfg) {
+  if (d >= cfg.floodThreshold * 0.75) return 'high';
+  if (d >= cfg.floodThreshold * 0.35) return 'mid';
   return 'low';
 }
-
-function pctOfFlood(discharge, cfg) {
-  return Math.min(99, Math.max(1, Math.round(
-    (discharge - cfg.normalMin) / (cfg.floodThreshold - cfg.normalMin) * 100
-  )));
+function pctOfFlood(d, cfg) {
+  return Math.min(99, Math.max(1, Math.round((d - cfg.normalMin) / (cfg.floodThreshold - cfg.normalMin) * 100)));
 }
 
+const statusStyle = { high:'background:rgba(255,79,79,.15);color:#ff6b6b;', mid:'background:rgba(245,197,66,.12);color:#f5c542;', low:'background:rgba(34,217,138,.1);color:#22d98a;' };
+const statusLabel = { high:'⚠ High Risk — Rising', mid:'~ Moderate — Monitor', low:'✓ Low — Normal' };
+
 async function fetchGaugeData() {
-  // Batch into groups of 5 to avoid hammering the API
   const batchSize = 5;
   const results = [];
   for (let b = 0; b < gaugeConfig.length; b += batchSize) {
@@ -1104,50 +937,37 @@ async function fetchGaugeData() {
       return fetch(`https://flood-api.open-meteo.com/v1/flood?latitude=${g.lat}&longitude=${g.lng}&daily=river_discharge&forecast_days=7&past_days=2`)
         .then(r => r.json())
         .then(data => ({ i, g, data }))
-        .catch(err => ({ i, g, data: null }));
+        .catch(() => ({ i, g, data: null }));
     });
-    const batchResults = await Promise.all(batch);
-    results.push(...batchResults);
-    // Small delay between batches
+    results.push(...await Promise.all(batch));
     if (b + batchSize < gaugeConfig.length) await new Promise(r => setTimeout(r, 300));
   }
 
-  let highestRisk = 'low';
-  let maxPct = 0;
+  let highestRisk = 'low', maxPct = 0;
   const alertData = [];
 
   results.forEach(({ i, g, data }) => {
     if (!data || !data.daily) return;
+    const dis = data.daily.river_discharge;
+    const today     = dis[2] || dis[0];
+    const yesterday = dis[1] || today;
+    const tomorrow  = dis[3] || today;
+    const risk      = classifyRisk(today, g);
+    const pct       = pctOfFlood(today, g);
+    const trend     = today > yesterday * 1.05 ? '📈' : today < yesterday * 0.95 ? '📉' : '➡';
+    const rateVal   = today - yesterday;
+    const rateStr   = rateVal > 0.5 ? `+${rateVal.toFixed(0)}m³/s` : rateVal < -0.5 ? `${rateVal.toFixed(0)}m³/s` : 'stable';
 
-    const discharges = data.daily.river_discharge;
-    const today     = discharges[2] || discharges[0];
-    const yesterday = discharges[1] || today;
-    const tomorrow  = discharges[3] || today;
-
-    const risk    = classifyRisk(today, g);
-    const pct     = pctOfFlood(today, g);
-    const trend   = today > yesterday * 1.05 ? '📈' : today < yesterday * 0.95 ? '📉' : '➡';
-    const rateVal = today - yesterday;
-    const rateStr = rateVal > 0.5 ? `+${rateVal.toFixed(0)}m³/s` : rateVal < -0.5 ? `${rateVal.toFixed(0)}m³/s` : 'stable';
-
-    // Store in cache
     gaugeCache[i] = { risk, pct, discharge: today, rateStr, trend, tomorrow };
 
     if (risk === 'high' || (risk === 'mid' && highestRisk === 'low')) highestRisk = risk;
     if (pct > maxPct) maxPct = pct;
 
-    const riskColor = { high:'#ff4f4f', mid:'#f5c542', low:'#22d98a' }[risk];
     const sym = { high:'⚠', mid:'~', low:'✓' }[risk];
+    const el = document.getElementById(`marker-${i}`);
+    if (el) { el.className = `fw-marker ${risk}`; el.textContent = sym; }
 
-    // Update map marker
-    const markerEl = document.getElementById(`marker-${i}`);
-    if (markerEl) {
-      markerEl.className = `fw-marker ${risk}`;
-      markerEl.textContent = sym;
-    }
-
-    // Update popup
-    gaugeMarkers[i].setPopupContent(`
+    gaugePopups[i].setHTML(`
       <div class="popup-title">📍 ${g.name}</div>
       <div class="popup-row"><span>${g.state} · ${g.river}</span></div>
       <div class="popup-row"><span>Discharge</span><span>${today.toFixed(1)} m³/s</span></div>
@@ -1157,26 +977,20 @@ async function fetchGaugeData() {
       <div class="popup-status" style="${statusStyle[risk]}">${statusLabel[risk]}</div>
     `);
 
+    // Update river colours on map
+    if (map.getLayer('rivers-dash') && map.getLayer('rivers-base')) {
+      if (risk === 'high') {
+        map.setPaintProperty('rivers-dash', 'line-color', '#ff4545');
+        map.setPaintProperty('rivers-base', 'line-color', '#ff4545');
+      }
+    }
+
     alertData.push({ name: g.name, river: g.river, state: g.state, risk });
   });
 
-  // Re-render visible gauge list with fresh data
   renderGaugeList();
   updateVerdict(highestRisk, maxPct);
   updateAlerts(alertData);
-
-  // Pass risk colours to river layer for visual feedback
-  const riverRiskMap = {};
-  results.forEach(({ g, data }) => {
-    if (!data || !data.daily) return;
-    const today = data.daily.river_discharge[2] || data.daily.river_discharge[0];
-    const risk  = classifyRisk(today, g);
-    const color = { high:'#ff4f4f', mid:'#f5c542', low:'#4aa8ff' }[risk];
-    // Map gauge river name to colour (partial match)
-    riverRiskMap[g.river.replace(' R.','')] = color;
-  });
-  // Update river colours based on risk
-  updateRiverColors(riverRiskMap);
 }
 
 function updateVerdict(risk, pct) {
@@ -1186,105 +1000,55 @@ function updateVerdict(risk, pct) {
     low:  { status:'LOW RISK',        sub:'Rivers within normal range. Continue to monitor forecasts.', color:'#22d98a', icon:'✅', glow:'rgba(34,217,138,.08)' },
   };
   const m = msgs[risk];
-  const vStatus = document.getElementById('verdictStatus');
-  const vSub    = document.getElementById('verdictSub');
-  const vIcon   = document.getElementById('verdictIcon');
-  const needle  = document.getElementById('needle');
-  const sRisk   = document.getElementById('s-risk');
-
-  if (vStatus) { vStatus.textContent = m.status; vStatus.style.color = m.color; }
-  if (vSub)    { vSub.textContent = m.sub; }
-  if (vIcon)   { vIcon.textContent = m.icon; vIcon.style.background = m.glow; }
-  if (needle)  { needle.style.left = Math.min(95, pct)+'%'; }
-  if (sRisk)   {
-    sRisk.textContent = risk.toUpperCase();
-    sRisk.className = `rr-val rr-risk-${risk}`;
-  }
+  document.getElementById('verdictStatus').textContent = m.status;
+  document.getElementById('verdictStatus').style.color = m.color;
+  document.getElementById('verdictSub').textContent = m.sub;
+  document.getElementById('verdictIcon').textContent = m.icon;
+  document.getElementById('verdictIcon').style.background = m.glow;
+  document.getElementById('needle').style.left = Math.min(95, pct)+'%';
+  const sRisk = document.getElementById('s-risk');
+  sRisk.textContent = risk.toUpperCase();
+  sRisk.className = `rr-val rr-risk-${risk}`;
 }
 
-// ══════════════════════════════════════════
-//  DYNAMIC ALERTS — based on real gauge data
-// ══════════════════════════════════════════
 function updateAlerts(gaugeResults) {
   const container = document.getElementById('alertsContainer');
   if (!container) return;
-
-  const highGauges = gaugeResults.filter(g => g.risk === 'high');
-  const midGauges  = gaugeResults.filter(g => g.risk === 'mid');
+  const highG = gaugeResults.filter(g => g.risk === 'high');
+  const midG  = gaugeResults.filter(g => g.risk === 'mid');
   const alerts = [];
-
-  if (highGauges.length > 0) {
-    const names = highGauges.map(g => `${g.name} (${g.state||''})`).join(', ');
-    alerts.push({
-      cls: 'alert-high', ico: '🔴',
-      hd: `Flood Warning — ${highGauges.length > 1 ? 'Multiple Rivers' : highGauges[0].river}`,
-      bd: `${names} above flood threshold. Avoid low-lying areas near waterways.`
-    });
-  }
-  if (midGauges.length > 0) {
-    const names = midGauges.map(g => `${g.name} (${g.state||''})`).join(', ');
-    alerts.push({
-      cls: 'alert-mid', ico: '🟡',
-      hd: `Flood Watch — ${midGauges.length > 1 ? 'Multiple Rivers' : midGauges[0].river}`,
-      bd: `${names} elevated. Monitor conditions closely.`
-    });
-  }
-  if (alerts.length === 0) {
-    alerts.push({
-      cls: 'alert-info', ico: '✅',
-      hd: 'All Rivers Normal',
-      bd: 'No flood warnings active for SE Queensland. Conditions are currently stable.'
-    });
-  }
-  // Always add data source note
-  alerts.push({
-    cls: 'alert-info', ico: '🔵',
-    hd: 'Live Data Active',
-    bd: `River discharge from GloFAS via Open-Meteo. Updated ${new Date().toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit'})} AEST.`
-  });
-
-  container.innerHTML = alerts.map(a => `
-    <div class="alert ${a.cls}">
-      <div class="a-ico">${a.ico}</div>
-      <div><div class="a-hd">${a.hd}</div><div class="a-bd">${a.bd}</div></div>
-    </div>`).join('');
+  if (highG.length) alerts.push({ cls:'alert-high', ico:'🔴', hd:`Flood Warning — ${highG.length > 1 ? 'Multiple Rivers' : highG[0].river}`, bd:`${highG.map(g=>`${g.name} (${g.state})`).join(', ')} above flood threshold.` });
+  if (midG.length)  alerts.push({ cls:'alert-mid',  ico:'🟡', hd:`Flood Watch — ${midG.length > 1 ? 'Multiple Rivers' : midG[0].river}`, bd:`${midG.map(g=>`${g.name} (${g.state})`).join(', ')} elevated.` });
+  if (!alerts.length) alerts.push({ cls:'alert-info', ico:'✅', hd:'All Rivers Normal', bd:'No flood warnings active. Conditions are currently stable.' });
+  alerts.push({ cls:'alert-info', ico:'🔵', hd:'Live Data Active', bd:`River discharge from GloFAS via Open-Meteo. Updated ${new Date().toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'})} AEST.` });
+  container.innerHTML = alerts.map(a => `<div class="alert ${a.cls}"><div class="a-ico">${a.ico}</div><div><div class="a-hd">${a.hd}</div><div class="a-bd">${a.bd}</div></div></div>`).join('');
 }
 
 // ══════════════════════════════════════════
-//  OPEN-METEO WEATHER API — hourly rainfall
-//  for timeline + readout + sparkline
+//  RAINFALL DATA
 // ══════════════════════════════════════════
 async function fetchRainfallData() {
-  const lat = -27.47, lng = 152.65; // SE QLD centre
+  const lat = -27.47, lng = 152.65;
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=precipitation,precipitation_probability&forecast_days=2&timezone=Australia%2FBrisbane`;
-
   try {
     const r = await fetch(url);
     const data = await r.json();
     const times  = data.hourly.time;
     const precip = data.hourly.precipitation;
-
-    // Find current hour index
-    const now = new Date();
+    const now    = new Date();
     const nowStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}T${String(now.getHours()).padStart(2,'0')}:00`;
     let nowIdx = times.findIndex(t => t === nowStr);
     if (nowIdx < 0) nowIdx = 0;
-
-    // Current rainfall rate
     const currentMM = precip[nowIdx] || 0;
     const last6h = precip.slice(Math.max(0, nowIdx-6), nowIdx).reduce((a,b) => a+(b||0), 0);
     document.getElementById('s-now').textContent = currentMM.toFixed(1);
     document.getElementById('s-6h').textContent  = last6h.toFixed(0);
-
-    // Build timeline — 5 hours back, now, 6 hours forward
     const tlEl = document.getElementById('tlScroll');
     tlEl.innerHTML = '';
-    const windowStart = nowIdx - 5;
-    const windowEnd   = nowIdx + 7;
+    const windowStart = nowIdx - 5, windowEnd = nowIdx + 7;
     const slice = precip.slice(Math.max(0,windowStart), windowEnd);
-    const sliceTimes  = times.slice(Math.max(0,windowStart), windowEnd);
+    const sliceTimes = times.slice(Math.max(0,windowStart), windowEnd);
     const maxMM = Math.max(...slice, 1);
-
     slice.forEach((mm, j) => {
       const tIdx = Math.max(0, windowStart) + j;
       const isNow = tIdx === nowIdx;
@@ -1292,21 +1056,13 @@ async function fetchRainfallData() {
       const lbl = isNow ? 'NOW' : String(t.getHours()).padStart(2,'0')+'h';
       const bh  = Math.round((mm/maxMM)*42)+3;
       const col = mm > maxMM*0.75 ? 'var(--high)' : mm > maxMM*0.4 ? 'var(--mid)' : 'var(--blue)';
-      const el  = document.createElement('div');
+      const el = document.createElement('div');
       el.className = 'tl-col'+(isNow?' now':'');
-      el.innerHTML = `<div class="tl-lbl">${lbl}</div>
-        <div class="tl-bar" style="height:${bh}px;background:${col};opacity:${0.45+(mm/maxMM)*0.55}"></div>
-        <div class="tl-mm">${mm.toFixed(1)}</div>`;
+      el.innerHTML = `<div class="tl-lbl">${lbl}</div><div class="tl-bar" style="height:${bh}px;background:${col};opacity:${0.45+(mm/maxMM)*0.55}"></div><div class="tl-mm">${mm.toFixed(1)}</div>`;
       tlEl.appendChild(el);
     });
-
-    // Draw sparkline with real 24h data
     drawSparkline(precip.slice(nowIdx, nowIdx+24));
-
-  } catch(e) {
-    console.warn('Rainfall fetch failed:', e);
-    drawSparklineFallback();
-  }
+  } catch(e) { drawSparklineFallback(); }
 }
 
 function drawSparkline(data) {
@@ -1315,30 +1071,20 @@ function drawSparkline(data) {
   sc.width = sc.offsetWidth * 2; sc.height = 110;
   const W = sc.width, H = sc.height;
   if (!data || data.length < 2) { drawSparklineFallback(); return; }
-
   const maxV = Math.max(...data, 1);
   const pts  = data.map((v,i) => [i/(data.length-1)*W, H-((v||0)/maxV)*(H*0.85)-4]);
-
   const g = s.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'rgba(74,168,255,.45)');
-  g.addColorStop(.6,'rgba(74,168,255,.12)');
-  g.addColorStop(1,'rgba(74,168,255,.02)');
-
+  g.addColorStop(0,'rgba(74,168,255,.45)'); g.addColorStop(.6,'rgba(74,168,255,.12)'); g.addColorStop(1,'rgba(74,168,255,.02)');
   s.beginPath(); s.moveTo(pts[0][0],H);
   pts.forEach(p => s.lineTo(p[0],p[1]));
   s.lineTo(pts[pts.length-1][0],H); s.closePath();
   s.fillStyle=g; s.fill();
-
   s.beginPath(); pts.forEach((p,i) => i ? s.lineTo(p[0],p[1]) : s.moveTo(p[0],p[1]));
   s.strokeStyle='#4aa8ff'; s.lineWidth=2.5; s.lineJoin='round'; s.stroke();
-
-  // Current position dot
   s.beginPath(); s.arc(pts[0][0],pts[0][1],5,0,Math.PI*2);
   s.fillStyle='#4aa8ff'; s.fill();
 }
-
 function drawSparklineFallback() {
-  // Keep the existing hardcoded sparkline as fallback
   const sc = document.getElementById('spark');
   const s  = sc.getContext('2d');
   sc.width = sc.offsetWidth*2; sc.height = 110;
@@ -1356,62 +1102,45 @@ function drawSparklineFallback() {
 }
 
 // ══════════════════════════════════════════
-//  LOCATION — real GPS
+//  LOCATION
 // ══════════════════════════════════════════
 let myMarker = null;
-let myAccCircle = null;
-let locationWatcher = null;
 
 function requestLocation() {
   const btn = document.getElementById('locBtn');
   btn.classList.add('locating');
   btn.textContent = '↻';
   dismissToast();
-
   if (!navigator.geolocation) {
     setLocation(-27.47, 152.65, 'SE Queensland (default)');
-    btn.classList.remove('locating');
-    btn.textContent = '◎';
+    btn.classList.remove('locating'); btn.textContent = '◎';
     return;
   }
-
   navigator.geolocation.getCurrentPosition(
     pos => {
-      const { latitude: lat, longitude: lng, accuracy } = pos.coords;
-      btn.classList.remove('locating');
-      btn.textContent = '◎';
-      placeMyLocation(lat, lng, accuracy);
+      const { latitude: lat, longitude: lng } = pos.coords;
+      btn.classList.remove('locating'); btn.textContent = '◎';
+      placeMyLocation(lat, lng);
       reverseGeocode(lat, lng);
-      map.flyTo([lat, lng], 10, { duration: 1.4 });
+      map.flyTo({ center: [lng, lat], zoom: 10, duration: 1400 });
     },
     err => {
-      console.warn('Geolocation error:', err.message);
-      btn.classList.remove('locating');
-      btn.textContent = '◎';
+      btn.classList.remove('locating'); btn.textContent = '◎';
       setLocation(-27.47, 152.65, 'SE Queensland (default)');
     },
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
   );
 }
 
-function placeMyLocation(lat, lng, accuracy) {
-  const icon = L.divIcon({
-    className:'', html:'<div class="my-loc"></div>',
-    iconSize:[14,14], iconAnchor:[7,7]
-  });
-  if (myMarker) map.removeLayer(myMarker);
-  if (myAccCircle) map.removeLayer(myAccCircle);
-  myMarker = L.marker([lat,lng], { icon, zIndexOffset:1000 }).addTo(map);
-  if (accuracy < 5000) {
-    myAccCircle = L.circle([lat,lng], {
-      radius: accuracy, color:'#4aa8ff',
-      fillColor:'#4aa8ff', fillOpacity:.05,
-      weight:.8, opacity:.3
-    }).addTo(map);
-  }
+function placeMyLocation(lat, lng) {
+  const el = document.createElement('div');
+  el.className = 'my-loc';
+  if (myMarker) myMarker.remove();
+  myMarker = new maplibregl.Marker({ element: el })
+    .setLngLat([lng, lat])
+    .addTo(map);
 }
 
-// Reverse geocode using Nominatim (free, no key needed)
 function reverseGeocode(lat, lng) {
   fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`)
     .then(r => r.json())
@@ -1419,8 +1148,7 @@ function reverseGeocode(lat, lng) {
       const addr = data.address;
       const suburb = addr.suburb || addr.town || addr.village || addr.county || '';
       const state  = addr.state_district || addr.state || '';
-      const label  = suburb ? `${suburb}, ${state}` : (state || 'Your Location');
-      setLocation(lat, lng, label);
+      setLocation(lat, lng, suburb ? `${suburb}, ${state}` : (state || 'Your Location'));
     })
     .catch(() => setLocation(lat, lng, 'Your Location'));
 }
@@ -1429,26 +1157,22 @@ function setLocation(lat, lng, label) {
   document.getElementById('locLabel').textContent = label;
 }
 
-// ── Search using Nominatim ──
-const searchInput = document.getElementById('searchInput');
+// ── Search ──
+const searchInput   = document.getElementById('searchInput');
 const searchResults = document.getElementById('searchResults');
 let searchTimer;
-
 searchInput.addEventListener('input', () => {
   clearTimeout(searchTimer);
   const q = searchInput.value.trim();
   if (q.length < 2) { searchResults.classList.remove('open'); return; }
   searchTimer = setTimeout(() => doSearch(q), 350);
 });
-
 searchInput.addEventListener('focus', () => {
   if (searchInput.value.trim().length >= 2) searchResults.classList.add('open');
 });
-
 document.addEventListener('click', e => {
   if (!e.target.closest('.search-wrap')) searchResults.classList.remove('open');
 });
-
 function doSearch(q) {
   fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ', Australia')}&format=json&limit=5&countrycodes=au`)
     .then(r => r.json())
@@ -1459,16 +1183,15 @@ function doSearch(q) {
       } else {
         results.forEach(r => {
           const parts = r.display_name.split(',');
-          const name = parts[0].trim();
-          const sub  = parts.slice(1,3).join(',').trim();
+          const name = parts[0].trim(), sub = parts.slice(1,3).join(',').trim();
           const el = document.createElement('div');
           el.className = 'sr-item';
           el.innerHTML = `<span>📍</span><div><div class="sr-name">${name}</div><div class="sr-sub">${sub}</div></div>`;
           el.onclick = () => {
-            map.flyTo([r.lat, r.lon], 11, { duration:1.2 });
+            map.flyTo({ center: [parseFloat(r.lon), parseFloat(r.lat)], zoom: 11, duration: 1200 });
             searchInput.value = name;
             searchResults.classList.remove('open');
-            placeMyLocation(parseFloat(r.lat), parseFloat(r.lon), 500);
+            placeMyLocation(parseFloat(r.lat), parseFloat(r.lon));
             setLocation(r.lat, r.lon, name);
           };
           searchResults.appendChild(el);
@@ -1476,74 +1199,65 @@ function doSearch(q) {
       }
       searchResults.classList.add('open');
     })
-    .catch(() => { searchResults.classList.remove('open'); });
+    .catch(() => searchResults.classList.remove('open'));
 }
 
-// ── Location toast ──
-function showToast() {
-  setTimeout(() => document.getElementById('locToast').classList.add('show'), 1200);
-}
-function dismissToast() {
-  document.getElementById('locToast').classList.remove('show');
-}
-
-// Show toast on first visit (if no permission cached)
+// ── Toast ──
+function showToast() { setTimeout(() => document.getElementById('locToast').classList.add('show'), 1200); }
+function dismissToast() { document.getElementById('locToast').classList.remove('show'); }
 if (!localStorage.getItem('fw_loc_asked')) {
-  showToast();
-  localStorage.setItem('fw_loc_asked', '1');
-} else {
-  // Auto-locate on return visits
-  setTimeout(requestLocation, 500);
-}
+  showToast(); localStorage.setItem('fw_loc_asked', '1');
+} else { setTimeout(requestLocation, 500); }
 
 // ══════════════════════════════════════════
 //  MOBILE BOTTOM SHEET
 // ══════════════════════════════════════════
 const sidebar = document.getElementById('sidebar');
 const handle  = document.getElementById('sheetHandle');
-let sheetOpen = false;
-let touchStartY = 0;
-
-handle.addEventListener('click', () => {
-  sheetOpen = !sheetOpen;
-  sidebar.classList.toggle('sheet-open', sheetOpen);
-});
-
-handle.addEventListener('touchstart', e => {
-  touchStartY = e.touches[0].clientY;
-}, { passive: true });
-
+let sheetOpen = false, touchStartY = 0;
+handle.addEventListener('click', () => { sheetOpen = !sheetOpen; sidebar.classList.toggle('sheet-open', sheetOpen); });
+handle.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
 handle.addEventListener('touchend', e => {
   const dy = touchStartY - e.changedTouches[0].clientY;
   if (dy > 30) { sheetOpen = true;  sidebar.classList.add('sheet-open'); }
   if (dy < -30) { sheetOpen = false; sidebar.classList.remove('sheet-open'); }
 }, { passive: true });
-
-// Close sheet when tapping map
 document.getElementById('map').addEventListener('click', () => {
-  if (sheetOpen && window.innerWidth <= 768) {
-    sheetOpen = false;
-    sidebar.classList.remove('sheet-open');
-  }
+  if (sheetOpen && window.innerWidth <= 768) { sheetOpen = false; sidebar.classList.remove('sheet-open'); }
 });
 
 // ══════════════════════════════════════════
 //  LAYER TOGGLES
 // ══════════════════════════════════════════
-let layerState = { radar:true, zones:true, gauges:true };
+let layerState = { radar:true, rivers:true, zones:true, gauges:true };
+
 function togglePill(el, layer) {
   layerState[layer] = !layerState[layer];
   el.classList.toggle('on');
-  if (layer === 'zones') zoneCircles.forEach(c => layerState.zones ? map.addLayer(c) : map.removeLayer(c));
+  if (layer === 'rivers') {
+    riversVisible = layerState.rivers;
+    const vis = layerState.rivers ? 'visible' : 'none';
+    if (map.getLayer('rivers-base')) map.setLayoutProperty('rivers-base', 'visibility', vis);
+    if (map.getLayer('rivers-dash')) map.setLayoutProperty('rivers-dash', 'visibility', vis);
+  }
+  if (layer === 'zones') {
+    const vis = layerState.zones ? 'visible' : 'none';
+    if (map.getLayer('zones-fill')) map.setLayoutProperty('zones-fill', 'visibility', vis);
+    if (map.getLayer('zones-line')) map.setLayoutProperty('zones-line', 'visibility', vis);
+  }
+  if (layer === 'gauges') {
+    gaugeMarkers.forEach(m => {
+      m.getElement().style.display = layerState.gauges ? '' : 'none';
+    });
+  }
   if (layer === 'radar') {
     if (layerState.radar) { showFrame(animationPosition, false); }
-    else { if (radarLayers[animationPosition]) map.removeLayer(radarLayers[animationPosition]); }
+    else {
+      mapFrames.forEach((f, i) => {
+        if (map.getLayer(`radar-${i}`)) map.setLayoutProperty(`radar-${i}`, 'visibility', 'none');
+      });
+    }
     document.getElementById('radarTimestamp').style.display = layerState.radar ? 'block' : 'none';
-  }
-  if (layer === 'rivers') {
-    particleVisible = layerState.rivers;
-    if (layerState.rivers) fetchRiverSegments();
-    else { riverSegments = []; riverParticles = []; }
   }
 }
 
@@ -1553,59 +1267,44 @@ function togglePill(el, layer) {
 function focusGauge(el, lat, lng) {
   document.querySelectorAll('.gauge').forEach(g => g.classList.remove('sel'));
   el.classList.add('sel');
-  map.flyTo([lat, lng], 11, { duration:1.2 });
-  // On mobile, close the sheet so user can see the map
-  if (window.innerWidth <= 768) {
-    sheetOpen = false;
-    sidebar.classList.remove('sheet-open');
-  }
+  map.flyTo({ center: [lng, lat], zoom: 11, duration: 1200 });
+  if (window.innerWidth <= 768) { sheetOpen = false; sidebar.classList.remove('sheet-open'); }
 }
 
 // ══════════════════════════════════════════
-//  RAINVIEWER RADAR — real animated radar tiles
-//  Free, no API key, updates every ~5 min
+//  RAINVIEWER RADAR
 // ══════════════════════════════════════════
-let apiData = {};
-let mapFrames = [];
-let radarLayers = [];
-let animationPosition = 0;
-let animationTimer = null;
-let isPlaying = false;
-
-// Color scheme 6 = "TheWeatherChannel" blue→green→yellow→red
-const RADAR_COLOR  = 2;  // Original - vivid green/yellow/red, best on dark maps
-const RADAR_SMOOTH = 1;
-const RADAR_SNOW   = 0;
-const RADAR_SIZE   = 256;
-const RADAR_EXT    = 'png';
-const RADAR_OPACITY = 0.8;
+let apiData = {}, mapFrames = [], animationPosition = 0, animationTimer = null, isPlaying = false;
+const RADAR_COLOR = 2, RADAR_SMOOTH = 1, RADAR_SNOW = 0, RADAR_SIZE = 256;
 
 function loadRainViewerData() {
   fetch('https://api.rainviewer.com/public/weather-maps.json')
     .then(r => r.json())
-    .then(data => {
-      apiData = data;
-      initRadarFrames(data);
-    })
+    .then(data => { apiData = data; initRadarFrames(data); })
     .catch(e => console.warn('RainViewer fetch failed:', e));
 }
 
 function initRadarFrames(api) {
-  // Remove old layers
-  radarLayers.forEach(l => { if (l && map.hasLayer(l)) map.removeLayer(l); });
-  radarLayers = [];
+  // Remove old radar layers
+  mapFrames.forEach((f, i) => {
+    if (map.getLayer(`radar-${i}`)) map.removeLayer(`radar-${i}`);
+    if (map.getSource(`radar-${i}`)) map.removeSource(`radar-${i}`);
+  });
   mapFrames = [];
-
   if (!api || !api.radar) return;
   mapFrames = (api.radar.past || []).concat(api.radar.nowcast || []);
 
-  // Pre-create tile layers (but don't add to map yet)
-  mapFrames.forEach(frame => {
-    const url = `${api.host}${frame.path}/${RADAR_SIZE}/{z}/{x}/{y}/${RADAR_COLOR}/${RADAR_SMOOTH}_${RADAR_SNOW}.${RADAR_EXT}`;
-    radarLayers.push(L.tileLayer(url, { opacity: 0, zIndex: 500, attribution: 'RainViewer', pane: 'overlayPane' }));
+  // Add all frames as raster sources (hidden)
+  mapFrames.forEach((frame, i) => {
+    const url = `${api.host}${frame.path}/${RADAR_SIZE}/{z}/{x}/{y}/${RADAR_COLOR}/${RADAR_SMOOTH}_${RADAR_SNOW}.png`;
+    if (!map.getSource(`radar-${i}`)) {
+      map.addSource(`radar-${i}`, { type:'raster', tiles:[url], tileSize:256 });
+    }
+    if (!map.getLayer(`radar-${i}`)) {
+      map.addLayer({ id:`radar-${i}`, type:'raster', source:`radar-${i}`, paint:{ 'raster-opacity':0 }, layout:{ visibility:'none' } });
+    }
   });
 
-  // Show latest frame
   animationPosition = mapFrames.length - 1;
   if (layerState.radar) {
     showFrame(animationPosition, false);
@@ -1616,29 +1315,23 @@ function initRadarFrames(api) {
 function showFrame(pos, preloadOnly) {
   const prevPos = animationPosition;
   animationPosition = pos;
-
-  // Fade out previous
-  if (radarLayers[prevPos] && prevPos !== pos) {
-    radarLayers[prevPos].setOpacity(0);
+  if (prevPos !== pos && map.getLayer(`radar-${prevPos}`)) {
+    map.setPaintProperty(`radar-${prevPos}`, 'raster-opacity', 0);
+    map.setLayoutProperty(`radar-${prevPos}`, 'visibility', 'none');
   }
-
-  // Add and fade in current
-  const layer = radarLayers[pos];
-  if (!layer) return;
-  if (!map.hasLayer(layer)) layer.addTo(map);
-  if (!preloadOnly) layer.setOpacity(RADAR_OPACITY);
-
+  if (!map.getLayer(`radar-${pos}`)) return;
+  map.setLayoutProperty(`radar-${pos}`, 'visibility', 'visible');
+  if (!preloadOnly) map.setPaintProperty(`radar-${pos}`, 'raster-opacity', 0.8);
   // Preload next
-  const next = radarLayers[pos + 1];
-  if (next && !map.hasLayer(next)) next.addTo(map);
-
-  // Update timestamp
+  const next = pos + 1;
+  if (next < mapFrames.length && map.getLayer(`radar-${next}`)) {
+    map.setLayoutProperty(`radar-${next}`, 'visibility', 'visible');
+  }
   const ts = document.getElementById('radarTimestamp');
   if (ts && mapFrames[pos]) {
     const d = new Date(mapFrames[pos].time * 1000);
     const isNowcast = pos >= (apiData.radar?.past?.length || 999);
-    const lbl = d.toLocaleTimeString('en-AU', { hour:'2-digit', minute:'2-digit' });
-    ts.textContent = isNowcast ? `▶ Forecast ${lbl}` : `⏱ Radar ${lbl}`;
+    ts.textContent = isNowcast ? `▶ Forecast ${d.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'})}` : `⏱ Radar ${d.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'})}`;
     ts.style.color = isNowcast ? '#f5c542' : '#4aa8ff';
   }
 }
@@ -1646,37 +1339,23 @@ function showFrame(pos, preloadOnly) {
 function toggleRadarPlay() {
   const pill = document.getElementById('playPill');
   isPlaying = !isPlaying;
-  if (isPlaying) {
-    pill.textContent = '⏸ Pause';
-    pill.classList.add('on');
-    animateRadar();
-  } else {
-    pill.textContent = '▶ Animate';
-    pill.classList.remove('on');
-    if (animationTimer) clearTimeout(animationTimer);
-  }
+  if (isPlaying) { pill.textContent = '⏸ Pause'; pill.classList.add('on'); animateRadar(); }
+  else { pill.textContent = '▶ Animate'; pill.classList.remove('on'); if (animationTimer) clearTimeout(animationTimer); }
 }
-
 function animateRadar() {
   if (!isPlaying) return;
   const next = (animationPosition + 1) % mapFrames.length;
   showFrame(next, false);
-  // Slower on last frame (current), faster through history
-  const delay = next === mapFrames.length - 1 ? 1200 : 400;
-  animationTimer = setTimeout(animateRadar, delay);
+  animationTimer = setTimeout(animateRadar, next === mapFrames.length - 1 ? 1200 : 400);
 }
-
-// Load radar on start, refresh every 5 minutes
-loadRainViewerData();
 setInterval(loadRainViewerData, 5 * 60 * 1000);
 
-// Keep thin animated rain drops as a subtle overlay on canvas (much lighter now)
+// ── Rain drops canvas ──
 const rc = document.getElementById('rainCanvas');
 const rct = rc.getContext('2d');
 let drops = [], rW, rH;
 function resizeRain() {
-  rW = rc.width = rc.offsetWidth;
-  rH = rc.height = rc.offsetHeight;
+  rW = rc.width = rc.offsetWidth; rH = rc.height = rc.offsetHeight;
   drops = Array.from({ length: 80 }, () => mkDrop());
 }
 function mkDrop(x) {
@@ -1691,18 +1370,17 @@ function animRain() {
     rct.lineTo(d.x-d.len*Math.sin(d.ang), d.y+d.len*Math.cos(d.ang));
     rct.strokeStyle=`rgba(130,195,255,${d.alpha})`; rct.lineWidth=d.w; rct.stroke();
     d.x-=d.speed*Math.sin(d.ang); d.y+=d.speed*Math.cos(d.ang);
-    if(d.y>rH+10||d.x<-10){Object.assign(d,mkDrop(Math.random()*rW));d.y=-5;}
+    if(d.y>rH+10||d.x<-10){ Object.assign(d,mkDrop(Math.random()*rW)); d.y=-5; }
   });
   requestAnimationFrame(animRain);
 }
 window.addEventListener('resize', resizeRain);
-setTimeout(()=>{resizeRain();animRain();},120);
+setTimeout(()=>{ resizeRain(); animRain(); }, 120);
 
 // ══════════════════════════════════════════
 //  ADDRESS SAFETY CHECKER
 // ══════════════════════════════════════════
-let addrTimer = null;
-let addrMarker = null;
+let addrTimer = null, addrMarker = null;
 
 function addrDebounce() {
   clearTimeout(addrTimer);
@@ -1710,7 +1388,6 @@ function addrDebounce() {
   if (val.length < 3) { hideSuggestions(); return; }
   addrTimer = setTimeout(fetchAddrSuggestions, 350);
 }
-
 function fetchAddrSuggestions() {
   const val = document.getElementById('addrInput').value.trim();
   if (val.length < 3) return;
@@ -1718,7 +1395,7 @@ function fetchAddrSuggestions() {
     .then(r => r.json())
     .then(results => {
       const box = document.getElementById('addrSuggestions');
-      if (!results.length) { box.style.display = 'none'; return; }
+      if (!results.length) { box.style.display='none'; return; }
       box.innerHTML = '';
       results.forEach(r => {
         const el = document.createElement('div');
@@ -1736,15 +1413,8 @@ function fetchAddrSuggestions() {
     })
     .catch(() => hideSuggestions());
 }
-
-function hideSuggestions() {
-  document.getElementById('addrSuggestions').style.display = 'none';
-}
-
-// Close suggestions on outside click
-document.addEventListener('click', e => {
-  if (!e.target.closest('.addr-wrap')) hideSuggestions();
-});
+function hideSuggestions() { document.getElementById('addrSuggestions').style.display='none'; }
+document.addEventListener('click', e => { if (!e.target.closest('.addr-wrap')) hideSuggestions(); });
 
 function checkAddress() {
   const val = document.getElementById('addrInput').value.trim();
@@ -1752,157 +1422,86 @@ function checkAddress() {
   hideSuggestions();
   const btn = document.getElementById('addrBtn');
   btn.textContent = '…'; btn.disabled = true;
-
   fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&countrycodes=au&limit=1&addressdetails=1`)
     .then(r => r.json())
     .then(results => {
       btn.textContent = 'Check'; btn.disabled = false;
-      if (!results.length) {
-        showAddrResult('caution', '⚠️ Address not found', 'Try a more specific address, suburb or postcode within Australia.');
-        return;
-      }
+      if (!results.length) { showAddrResult('caution','⚠️ Address not found','Try a more specific address, suburb or postcode within Australia.'); return; }
       const r = results[0];
       checkAddressCoords(parseFloat(r.lat), parseFloat(r.lon), r.display_name.split(',').slice(0,3).join(',').trim());
     })
-    .catch(() => {
-      btn.textContent = 'Check'; btn.disabled = false;
-      showAddrResult('caution', '⚠️ Search failed', 'Check your connection and try again.');
-    });
+    .catch(() => { btn.textContent='Check'; btn.disabled=false; showAddrResult('caution','⚠️ Search failed','Check your connection and try again.'); });
 }
 
 async function checkAddressCoords(lat, lon, label) {
   const btn = document.getElementById('addrBtn');
   btn.textContent = '…'; btn.disabled = true;
-
-  // Place a pin on the map
-  if (addrMarker) map.removeLayer(addrMarker);
-  const pinIcon = L.divIcon({
-    className: '',
-    html: `<div style="
-      width:22px;height:22px;border-radius:50% 50% 50% 0;
-      background:#4aa8ff;border:2px solid #fff;
-      transform:rotate(-45deg);box-shadow:0 2px 8px rgba(74,168,255,.6)
-    "></div>`,
-    iconSize:[22,22], iconAnchor:[11,22]
-  });
-  addrMarker = L.marker([lat, lon], { icon: pinIcon, zIndexOffset: 2000 }).addTo(map);
-  map.flyTo([lat, lon], 11, { duration: 1.2 });
-
+  if (addrMarker) addrMarker.remove();
+  const el = document.createElement('div');
+  el.style.cssText = 'width:22px;height:22px;border-radius:50% 50% 50% 0;background:#4aa8ff;border:2px solid #fff;transform:rotate(-45deg);box-shadow:0 2px 8px rgba(74,168,255,.6)';
+  addrMarker = new maplibregl.Marker({ element: el }).setLngLat([lon, lat]).addTo(map);
+  map.flyTo({ center: [lon, lat], zoom: 11, duration: 1200 });
   try {
-    // 1. Get river discharge at this exact location from GloFAS
-    const floodResp = await fetch(
-      `https://flood-api.open-meteo.com/v1/flood?latitude=${lat}&longitude=${lon}&daily=river_discharge&forecast_days=7&past_days=2`
-    );
+    const [floodResp, rainResp] = await Promise.all([
+      fetch(`https://flood-api.open-meteo.com/v1/flood?latitude=${lat}&longitude=${lon}&daily=river_discharge&forecast_days=7&past_days=2`),
+      fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum,precipitation_probability_max&forecast_days=3&timezone=Australia%2FSydney`)
+    ]);
     const floodData = await floodResp.json();
-
-    // 2. Get rainfall forecast at this location
-    const rainResp = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum,precipitation_probability_max&forecast_days=3&timezone=Australia%2FSydney`
-    );
-    const rainData = await rainResp.json();
-
+    const rainData  = await rainResp.json();
     btn.textContent = 'Check'; btn.disabled = false;
-
-    // Analyse flood data
     const discharges = floodData?.daily?.river_discharge || [];
-    const today      = discharges[2] || discharges[0] || 0;
-    const day3       = discharges[4] || today;
-    const day7       = discharges[8] || today;
+    const today = discharges[2] || discharges[0] || 0;
     const maxForecast = Math.max(...discharges.slice(2));
-
-    // Find nearest gauge for context
     let nearestGauge = null, nearestDist = Infinity;
     gaugeConfig.forEach(g => {
       const d = Math.sqrt((g.lat-lat)**2 + (g.lng-lon)**2);
       if (d < nearestDist) { nearestDist = d; nearestGauge = g; }
     });
-
-    // Calculate flood risk score (0–100)
     const nearThresh = nearestGauge ? nearestGauge.floodThreshold : 500;
     const nearMin    = nearestGauge ? nearestGauge.normalMin : 5;
-    const localPct   = Math.min(100, Math.max(0,
-      (today - nearMin) / (nearThresh - nearMin) * 100
-    ));
-    const forecastPct = Math.min(100, Math.max(0,
-      (maxForecast - nearMin) / (nearThresh - nearMin) * 100
-    ));
-
-    // Rainfall today/tomorrow
+    const localPct   = Math.min(100, Math.max(0, (today - nearMin) / (nearThresh - nearMin) * 100));
+    const forecastPct = Math.min(100, Math.max(0, (maxForecast - nearMin) / (nearThresh - nearMin) * 100));
     const rain = rainData?.daily?.precipitation_sum || [];
-    const rainToday    = rain[0] || 0;
-    const rainTomorrow = rain[1] || 0;
-    const rainDay3     = rain[2] || 0;
-    const totalRain3d  = rainToday + rainTomorrow + rainDay3;
-    const rainProb     = rainData?.daily?.precipitation_probability_max?.[0] || 0;
-
-    // Decision logic
-    let verdict, detail, cls;
+    const totalRain3d = (rain[0]||0) + (rain[1]||0) + (rain[2]||0);
+    const rainProb = rainData?.daily?.precipitation_probability_max?.[0] || 0;
     const rising = maxForecast > today * 1.15;
-
+    let verdict, detail, cls;
     if (forecastPct >= 70 || localPct >= 75) {
-      cls = 'danger';
-      verdict = '🔴 HIGH FLOOD RISK';
-      detail = `River discharge at this location is ${today.toFixed(0)} m³/s — approaching flood levels. ` +
-        (rising ? `Forecast to rise further to ${maxForecast.toFixed(0)} m³/s over 7 days. ` : '') +
-        (totalRain3d > 30 ? `${totalRain3d.toFixed(0)}mm of rain forecast over 3 days. ` : '') +
-        `Nearest monitored catchment: ${nearestGauge?.name || 'unknown'}. ` +
-        `Follow BOM warnings and be ready to evacuate.`;
+      cls='danger'; verdict='🔴 HIGH FLOOD RISK';
+      detail=`River discharge at this location is ${today.toFixed(0)} m³/s — approaching flood levels. `+(rising?`Forecast to rise to ${maxForecast.toFixed(0)} m³/s. `:'')+`Nearest monitored catchment: ${nearestGauge?.name||'unknown'}. Follow BOM warnings.`;
     } else if (forecastPct >= 35 || localPct >= 35 || totalRain3d > 50) {
-      cls = 'caution';
-      verdict = '🟡 MODERATE RISK — Monitor Closely';
-      detail = `Current discharge ${today.toFixed(0)} m³/s is elevated above normal. ` +
-        (rising ? `Expected to rise to ${maxForecast.toFixed(0)} m³/s. ` : '') +
-        (totalRain3d > 20 ? `${totalRain3d.toFixed(0)}mm of rain expected over 3 days (${rainProb}% chance today). ` : '') +
-        `Stay informed via BOM and your local SES. Nearest catchment: ${nearestGauge?.name || 'unknown'}.`;
+      cls='caution'; verdict='🟡 MODERATE RISK — Monitor Closely';
+      detail=`Current discharge ${today.toFixed(0)} m³/s is elevated. `+(rising?`Expected to rise to ${maxForecast.toFixed(0)} m³/s. `:'')+`${totalRain3d.toFixed(0)}mm rain expected over 3 days. Stay informed via BOM and SES.`;
     } else {
-      cls = 'safe';
-      verdict = '✅ LOW RISK — Currently Safe';
-      const rainNote = totalRain3d > 5
-        ? `${totalRain3d.toFixed(0)}mm of rain in the forecast — conditions may change.`
-        : `No significant rainfall forecast for the next 3 days.`;
-      detail = `River discharge at this location is ${today.toFixed(0)} m³/s — within normal range. ` +
-        rainNote + ` Nearest monitored river: ${nearestGauge?.name || 'unknown'} (${nearestGauge?.river || ''}).` +
-        ` Always check BOM for official warnings.`;
+      cls='safe'; verdict='✅ LOW RISK — Currently Safe';
+      detail=`River discharge ${today.toFixed(0)} m³/s within normal range. `+(totalRain3d > 5 ? `${totalRain3d.toFixed(0)}mm forecast over 3 days.` : 'No significant rainfall forecast.')+` Nearest monitored river: ${nearestGauge?.name||'unknown'}.`;
     }
-
     showAddrResult(cls, verdict, detail);
-
-    // Auto switch to the nearest state's tab
     if (nearestGauge) {
-      const tabBtn = Array.from(document.querySelectorAll('.stab'))
-        .find(b => b.textContent === nearestGauge.state);
+      const tabBtn = Array.from(document.querySelectorAll('.stab')).find(b => b.textContent === nearestGauge.state);
       if (tabBtn) switchState(nearestGauge.state, tabBtn);
     }
-
   } catch(e) {
-    btn.textContent = 'Check'; btn.disabled = false;
-    showAddrResult('caution', '⚠️ Data unavailable', 'Could not fetch flood data for this location. Try again shortly.');
+    btn.textContent='Check'; btn.disabled=false;
+    showAddrResult('caution','⚠️ Data unavailable','Could not fetch flood data for this location. Try again shortly.');
   }
 }
 
 function showAddrResult(cls, verdict, detail) {
-  const result  = document.getElementById('addrResult');
-  const vEl     = document.getElementById('addrVerdict');
-  const dEl     = document.getElementById('addrDetail');
+  const result = document.getElementById('addrResult');
+  document.getElementById('addrVerdict').textContent = verdict;
+  document.getElementById('addrDetail').textContent  = detail;
   result.className = `addr-result show ${cls}`;
-  vEl.textContent  = verdict;
-  dEl.textContent  = detail;
-  // Scroll result into view
-  result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  result.scrollIntoView({ behavior:'smooth', block:'nearest' });
 }
 
 // ══════════════════════════════════════════
-//  BOOT — fetch all real data on load
-//  then refresh every 10 minutes
+//  BOOT
 // ══════════════════════════════════════════
 async function loadAllData() {
   await Promise.all([fetchGaugeData(), fetchRainfallData()]);
 }
-
-// Initial load after map settles
 setTimeout(loadAllData, 800);
-
-// Refresh every 10 minutes
 setInterval(loadAllData, 10 * 60 * 1000);
 </script>
 </body>
