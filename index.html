@@ -681,12 +681,15 @@ const map = new maplibregl.Map({
   minZoom: 2,
   maxZoom: 18,
   attributionControl: false,
-  logoPosition: 'bottom-left'
+  logoPosition: 'bottom-left',
+  pixelRatio: window.devicePixelRatio || 1
 });
 
 
-// Resize map when sidebar changes layout
-setTimeout(() => map.resize(), 100);
+// Resize after layout settles - use multiple attempts to catch flex reflow
+setTimeout(() => map.resize(), 0);
+setTimeout(() => map.resize(), 200);
+setTimeout(() => map.resize(), 500);
 
 // ══════════════════════════════════════════
 //  RIVERS — PMTiles vector layer
