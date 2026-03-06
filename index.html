@@ -118,7 +118,8 @@ nav {
 
 /* ── LAYOUT ── */
 .app { display:flex; height:100vh; padding-top:var(--nav-h); }
-#map { flex:1; position:relative; z-index:1; }
+#map { flex:1; position:relative; z-index:1; min-height:0; overflow:hidden; }
+.maplibregl-map { width:100% !important; height:100% !important; }
 .maplibregl-ctrl-attrib { display:none !important; }
 .maplibregl-ctrl-logo { display:none !important; }
 
@@ -686,6 +687,7 @@ const map = new maplibregl.Map({
 let riversVisible = true;
 
 map.on('load', () => {
+  map.resize();
   // Add PMTiles source
   map.addSource('rivers', {
     type: 'vector',
