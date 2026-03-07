@@ -691,6 +691,7 @@ map.once('load', () => {
 //  RIVERS — PMTiles vector layer
 // ══════════════════════════════════════════
 let riversVisible = true;
+const RIVER_LAYER_IDS = ['rivers-major', 'rivers-medium', 'rivers-minor'];
 
 map.on('load', async () => {
   // Add PMTiles source using archive zoom metadata when available.
@@ -709,26 +710,80 @@ map.on('load', async () => {
     maxzoom: riversMaxZoom
   });
 
-  // Base river line (always on)
+  // River hierarchy layers:
+  // - majors always visible globally
+  // - medium/minor progressively revealed with zoom
   map.addLayer({
-    id: 'rivers-base',
+    id: 'rivers-major',
     type: 'line',
     source: 'rivers',
     'source-layer': 'rivers',
     maxzoom: riversMaxZoom + 1,
+    filter: ['<=', ['coalesce', ['get', 'ORD_FLOW'], 99], 3],
+    paint: {
+      'line-color': '#69b9ff',
+      'line-opacity': [
+        'interpolate', ['linear'], ['zoom'],
+        2, 0.18,
+        4, 0.20,
+        8, 0.17,
+        12, 0.15
+      ],
+      'line-width': [
+        'interpolate', ['linear'], ['zoom'],
+        2, ['match', ['get', 'ORD_FLOW'], 1, 1.8, 2, 1.5, 3, 1.2, 1.0],
+        8, ['match', ['get', 'ORD_FLOW'], 1, 3.8, 2, 3.0, 3, 2.4, 2.0],
+        12, ['match', ['get', 'ORD_FLOW'], 1, 5.4, 2, 4.4, 3, 3.4, 2.6]
+      ]
+    }
+  });
+
+  map.addLayer({
+    id: 'rivers-medium',
+    type: 'line',
+    source: 'rivers',
+    'source-layer': 'rivers',
+    minzoom: 5,
+    maxzoom: riversMaxZoom + 1,
+    filter: ['all', ['>=', ['coalesce', ['get', 'ORD_FLOW'], 99], 4], ['<=', ['coalesce', ['get', 'ORD_FLOW'], 99], 5]],
     paint: {
       'line-color': '#4aa8ff',
       'line-opacity': [
         'interpolate', ['linear'], ['zoom'],
-        2, 0.05,
-        6, 0.07,
-        10, 0.08
+        5, 0.07,
+        8, 0.09,
+        12, 0.08
       ],
       'line-width': [
         'interpolate', ['linear'], ['zoom'],
-        2, ['match', ['get', 'ORD_FLOW'], 1, 1.5, 2, 1.2, 3, 1.0, 4, 0.8, 0.5],
-        8, ['match', ['get', 'ORD_FLOW'], 1, 3.5, 2, 2.8, 3, 2.2, 4, 1.8, 5, 1.4, 1.0],
-        12, ['match', ['get', 'ORD_FLOW'], 1, 5.0, 2, 4.0, 3, 3.0, 4, 2.4, 5, 2.0, 6, 1.5, 1.2]
+        5, ['match', ['get', 'ORD_FLOW'], 4, 1.1, 5, 0.9, 0.8],
+        8, ['match', ['get', 'ORD_FLOW'], 4, 1.9, 5, 1.5, 1.2],
+        12, ['match', ['get', 'ORD_FLOW'], 4, 2.6, 5, 2.1, 1.6]
+      ]
+    }
+  });
+
+  map.addLayer({
+    id: 'rivers-minor',
+    type: 'line',
+    source: 'rivers',
+    'source-layer': 'rivers',
+    minzoom: 7,
+    maxzoom: riversMaxZoom + 1,
+    filter: ['>=', ['coalesce', ['get', 'ORD_FLOW'], 99], 6],
+    paint: {
+      'line-color': '#3c96eb',
+      'line-opacity': [
+        'interpolate', ['linear'], ['zoom'],
+        7, 0.04,
+        10, 0.06,
+        12, 0.07
+      ],
+      'line-width': [
+        'interpolate', ['linear'], ['zoom'],
+        7, 0.7,
+        10, 1.1,
+        12, 1.4
       ]
     }
   });
@@ -1274,7 +1329,7 @@ function togglePill(el, layer) {
   if (layer === 'rivers') {
     riversVisible = layerState.rivers;
     const vis = layerState.rivers ? 'visible' : 'none';
-    if (map.getLayer('rivers-base')) map.setLayoutProperty('rivers-base', 'visibility', vis);
+    RIVER_LAYER_IDS.forEach(id => { if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis); });
     document.getElementById('riverCanvas').style.display = layerState.rivers ? '' : 'none';
   }
   if (layer === 'zones') {
@@ -1682,7 +1737,7 @@ function showAddrResult(cls, verdict, detail) {
 
   function refreshFeatures(ts) {
     if (!map.loaded()) return;
-    const features = map.queryRenderedFeatures({ layers: ['rivers-base'] });
+    const features = map.queryRenderedFeatures({ layers: RIVER_LAYER_IDS });
     // Prioritise major rivers; cap total
     features.sort((a, b) => (a.properties.ORD_FLOW || 9) - (b.properties.ORD_FLOW || 9));
 
