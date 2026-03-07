@@ -726,7 +726,7 @@ const map = new maplibregl.Map({
   center: [134.0, -25.5],
   zoom: 4,
   minZoom: 2,
-  maxZoom: 18,
+  maxZoom: 14,
   attributionControl: false,
   logoPosition: 'bottom-left'
 });
@@ -734,6 +734,13 @@ const map = new maplibregl.Map({
 
 // ResizeObserver keeps MapLibre canvas in sync with actual container size
 new ResizeObserver(() => map.resize()).observe(map.getContainer());
+
+// Ensure initial paint happens even when layout is still settling on first load.
+map.once('load', () => {
+  map.resize();
+  requestAnimationFrame(() => map.resize());
+  setTimeout(() => map.resize(), 220);
+});
 
 // ══════════════════════════════════════════
 //  RIVERS — PMTiles vector layer
