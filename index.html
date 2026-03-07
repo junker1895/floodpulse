@@ -735,16 +735,33 @@ const map = new maplibregl.Map({
 // ResizeObserver keeps MapLibre canvas in sync with actual container size
 new ResizeObserver(() => map.resize()).observe(map.getContainer());
 
+// Ensure initial paint happens even when layout is still settling on first load.
+map.once('load', () => {
+  map.resize();
+  requestAnimationFrame(() => map.resize());
+  setTimeout(() => map.resize(), 220);
+});
+
 // ══════════════════════════════════════════
 //  RIVERS — PMTiles vector layer
 // ══════════════════════════════════════════
 let riversVisible = true;
 
-map.on('load', () => {
-  // Add PMTiles source
+map.on('load', async () => {
+  // Add PMTiles source using archive zoom metadata when available.
+  let riversMaxZoom = 14;
+  try {
+    const riverTiles = new pmtiles.PMTiles(PMTILES_URL);
+    const header = await riverTiles.getHeader();
+    if (Number.isFinite(header?.maxZoom)) riversMaxZoom = header.maxZoom;
+  } catch (e) {
+    console.warn('PMTiles header read failed, using fallback max zoom:', e);
+  }
+
   map.addSource('rivers', {
     type: 'vector',
     url: `pmtiles://${PMTILES_URL}`,
+    maxzoom: riversMaxZoom
   });
 
   // Base river line (always on)
@@ -753,6 +770,7 @@ map.on('load', () => {
     type: 'line',
     source: 'rivers',
     'source-layer': 'rivers',
+    maxzoom: riversMaxZoom + 1,
     paint: {
       'line-color': '#4aa8ff',
       'line-opacity': [
@@ -1350,7 +1368,7 @@ function focusGauge(el, lat, lng) {
 //  RAINVIEWER RADAR
 // ══════════════════════════════════════════
 let apiData = {}, mapFrames = [], animationPosition = 0, animationTimer = null, isPlaying = false;
-const RADAR_COLOR = 2, RADAR_SMOOTH = 1, RADAR_SNOW = 0, RADAR_SIZE = 256;
+const RADAR_COLOR = 2, RADAR_SMOOTH = 1, RADAR_SNOW = 0, RADAR_SIZE = 256, RADAR_MAX_ZOOM = 10;
 
 function loadRainViewerData() {
   fetch('https://api.rainviewer.com/public/weather-maps.json')
@@ -1372,8 +1390,8 @@ function initRadarFrames(api) {
   // Add all frames — MapLibre fetches tiles natively, no CORS issue
   mapFrames.forEach((frame, i) => {
     const url = `${api.host}${frame.path}/${RADAR_SIZE}/{z}/{x}/{y}/${RADAR_COLOR}/${RADAR_SMOOTH}_${RADAR_SNOW}.png`;
-    map.addSource(`radar-${i}`, { type: 'raster', tiles: [url], tileSize: 256, minzoom: 0, maxzoom: 12 });
-    map.addLayer({ id: `radar-${i}`, type: 'raster', source: `radar-${i}`, paint: { 'raster-opacity': 0 }, layout: { visibility: 'none' } });
+    map.addSource(`radar-${i}`, { type: 'raster', tiles: [url], tileSize: 256, minzoom: 0, maxzoom: RADAR_MAX_ZOOM });
+    map.addLayer({ id: `radar-${i}`, type: 'raster', source: `radar-${i}`, maxzoom: RADAR_MAX_ZOOM + 1, paint: { 'raster-opacity': 0 }, layout: { visibility: 'none' } });
   });
 
   animationPosition = mapFrames.length - 1;
@@ -1386,6 +1404,19 @@ function initRadarFrames(api) {
 function showFrame(pos, preloadOnly) {
   const prevPos = animationPosition;
   animationPosition = pos;
+
+  if (map.getZoom() > RADAR_MAX_ZOOM) {
+    mapFrames.forEach((f, i) => {
+      if (map.getLayer(`radar-${i}`)) map.setLayoutProperty(`radar-${i}`, 'visibility', 'none');
+    });
+    const ts = document.getElementById('radarTimestamp');
+    if (ts && layerState.radar) {
+      ts.textContent = `⚠ Radar unavailable above zoom ${RADAR_MAX_ZOOM}`;
+      ts.style.color = '#f5c542';
+    }
+    return;
+  }
+
   if (prevPos !== pos && map.getLayer(`radar-${prevPos}`)) {
     map.setPaintProperty(`radar-${prevPos}`, 'raster-opacity', 0);
     map.setLayoutProperty(`radar-${prevPos}`, 'visibility', 'none');
@@ -1420,6 +1451,11 @@ function animateRadar() {
   animationTimer = setTimeout(animateRadar, next === mapFrames.length - 1 ? 1200 : 400);
 }
 setInterval(loadRainViewerData, 5 * 60 * 1000);
+map.on('zoomend', () => {
+  if (!layerState.radar || !mapFrames.length) return;
+  showFrame(animationPosition, false);
+});
+
 
 // ── Rain drops canvas ──
 const rc = document.getElementById('rainCanvas');
