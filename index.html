@@ -1305,7 +1305,7 @@ function focusGauge(el, lat, lng) {
 //  RAINVIEWER RADAR
 // ══════════════════════════════════════════
 let apiData = {}, mapFrames = [], animationPosition = 0, animationTimer = null, isPlaying = false;
-const RADAR_COLOR = 2, RADAR_SMOOTH = 1, RADAR_SNOW = 0, RADAR_SIZE = 256, RADAR_MAX_ZOOM = 10;
+const RADAR_COLOR = 2, RADAR_SMOOTH = 1, RADAR_SNOW = 0, RADAR_SIZE = 256, RADAR_MAX_ZOOM = 9;
 
 function loadRainViewerData() {
   fetch('https://api.rainviewer.com/public/weather-maps.json')
@@ -1328,7 +1328,7 @@ function initRadarFrames(api) {
   mapFrames.forEach((frame, i) => {
     const url = `${api.host}${frame.path}/${RADAR_SIZE}/{z}/{x}/{y}/${RADAR_COLOR}/${RADAR_SMOOTH}_${RADAR_SNOW}.png`;
     map.addSource(`radar-${i}`, { type: 'raster', tiles: [url], tileSize: 256, minzoom: 0, maxzoom: RADAR_MAX_ZOOM });
-    map.addLayer({ id: `radar-${i}`, type: 'raster', source: `radar-${i}`, maxzoom: RADAR_MAX_ZOOM + 1, paint: { 'raster-opacity': 0 }, layout: { visibility: 'none' } });
+    map.addLayer({ id: `radar-${i}`, type: 'raster', source: `radar-${i}`, maxzoom: RADAR_MAX_ZOOM, paint: { 'raster-opacity': 0 }, layout: { visibility: 'none' } });
   });
 
   animationPosition = mapFrames.length - 1;
@@ -1342,13 +1342,13 @@ function showFrame(pos, preloadOnly) {
   const prevPos = animationPosition;
   animationPosition = pos;
 
-  if (map.getZoom() > RADAR_MAX_ZOOM) {
+  if (map.getZoom() >= RADAR_MAX_ZOOM) {
     mapFrames.forEach((f, i) => {
       if (map.getLayer(`radar-${i}`)) map.setLayoutProperty(`radar-${i}`, 'visibility', 'none');
     });
     const ts = document.getElementById('radarTimestamp');
     if (ts && layerState.radar) {
-      ts.textContent = `⚠ Radar unavailable above zoom ${RADAR_MAX_ZOOM}`;
+      ts.textContent = `⚠ Radar unavailable at zoom ${RADAR_MAX_ZOOM}+`;
       ts.style.color = '#f5c542';
     }
     return;
@@ -1388,7 +1388,7 @@ function animateRadar() {
   animationTimer = setTimeout(animateRadar, next === mapFrames.length - 1 ? 1200 : 400);
 }
 setInterval(loadRainViewerData, 5 * 60 * 1000);
-map.on('zoomend', () => {
+map.on('zoom', () => {
   if (!layerState.radar || !mapFrames.length) return;
   showFrame(animationPosition, false);
 });
