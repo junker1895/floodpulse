@@ -681,8 +681,7 @@ const map = new maplibregl.Map({
   minZoom: 2,
   maxZoom: 18,
   attributionControl: false,
-  logoPosition: 'bottom-left',
-  pixelRatio: window.devicePixelRatio || 1
+  logoPosition: 'bottom-left'
 });
 
 
@@ -961,6 +960,11 @@ async function fetchGaugeData() {
   renderGaugeList();
   updateVerdict(highestRisk, maxPct);
   updateAlerts(alertData);
+  // Re-anchor markers after data load to fix any coordinate drift
+  gaugeMarkers.forEach((m, i) => {
+    const g = gaugeConfig[i];
+    if (g) m.setLngLat([g.lng, g.lat]);
+  });
 }
 
 function updateVerdict(risk, pct) {
