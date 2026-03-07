@@ -815,11 +815,26 @@ const gaugeConfig = [
   { state:'SA',  lat:-34.10, lng:140.75, name:'Renmark',           river:'Murray R.',       normalMin:100, floodThreshold:1800 },
   { state:'SA',  lat:-37.83, lng:140.78, name:'Mt Gambier',        river:'Glenelg R.',      normalMin:1,   floodThreshold:120  },
   { state:'NT',  lat:-12.46, lng:130.84, name:'Darwin',            river:'Elizabeth R.',    normalMin:0,   floodThreshold:300  },
-  { state:'NT',  lat:-13.72, lng:136.18, name:'Katherine',         river:'Katherine R.',    normalMin:2,   floodThreshold:2000 },
+  { state:'NT',  lat:-14.47, lng:132.27, name:'Katherine',         river:'Katherine R.',    normalMin:2,   floodThreshold:2000 },
 ];
 
 let activeState = 'QLD';
 const gaugeCache = {};
+
+function pctOfFlood(discharge, gauge) {
+  const d = Number(discharge);
+  if (!Number.isFinite(d) || !gauge) return 0;
+  const min = Number(gauge.normalMin) || 0;
+  const threshold = Math.max(min + 1, Number(gauge.floodThreshold) || min + 1);
+  return Math.max(0, Math.min(100, Math.round(((d - min) / (threshold - min)) * 100)));
+}
+
+function classifyRisk(discharge, gauge) {
+  const p = pctOfFlood(discharge, gauge);
+  if (p >= 70) return 'high';
+  if (p >= 35) return 'mid';
+  return 'low';
+}
 
 // ── Gauge markers as MapLibre GeoJSON source (no DOM drift) ──
 function gaugeGeoJSON(dataMap = {}) {
@@ -964,9 +979,6 @@ async function fetchGaugeData() {
   updateVerdict(highestRisk, maxPct);
   updateAlerts(alertData);
 }
-}
-
-let activeState = 'QLD';
 
 function switchState(state, btn) {
   activeState = state;
