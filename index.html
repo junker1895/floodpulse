@@ -501,9 +501,9 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
 </nav>
 
 <div class="app">
-  <canvas id="rainCanvas" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none;"></canvas>
   <!-- MAP -->
   <div id="map">
+    <canvas id="rainCanvas" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;"></canvas>
     <div id="radarTimestamp">⏱ --:--</div>
     <div class="map-controls">
       <div class="mc-btn" onclick="map.zoomIn()" title="Zoom in">+</div>
