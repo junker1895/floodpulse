@@ -779,8 +779,9 @@ map.on('load', () => {
   // Place gauge markers once map is truly idle
   map.once('idle', () => {
     placeGaugeMarkers();
-    console.log('[MAP] idle - markers placed, canvas:', map.getCanvas().width, 'x', map.getCanvas().height);
-    console.log('[MAP] container:', map.getContainer().offsetWidth, 'x', map.getContainer().offsetHeight);
+    const r = map.getContainer().getBoundingClientRect();
+    console.log('[MAP] idle - canvas:', map.getCanvas().width, 'x', map.getCanvas().height);
+    console.log('[MAP] container rect:', Math.round(r.left), Math.round(r.top), Math.round(r.width), 'x', Math.round(r.height));
   });
 
   // Radar after map loads
@@ -965,8 +966,9 @@ async function fetchGaugeData() {
   updateVerdict(highestRisk, maxPct);
   updateAlerts(alertData);
   // Re-anchor markers after data load
-  console.log('[GAUGE] re-anchoring, canvas:', map.getCanvas().width, 'x', map.getCanvas().height);
-  console.log('[GAUGE] container:', map.getContainer().offsetWidth, 'x', map.getContainer().offsetHeight);
+  const rg = map.getContainer().getBoundingClientRect();
+  console.log('[GAUGE] canvas:', map.getCanvas().width, 'x', map.getCanvas().height);
+  console.log('[GAUGE] container rect:', Math.round(rg.left), Math.round(rg.top), Math.round(rg.width), 'x', Math.round(rg.height));
   gaugeMarkers.forEach((m, i) => {
     const g = gaugeConfig[i];
     if (g) m.setLngLat([g.lng, g.lat]);
