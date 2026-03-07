@@ -660,20 +660,68 @@ const map = new maplibregl.Map({
   container: 'map',
   style: {
     version: 8,
-    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+    glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
     sources: {
-      'carto-dark': {
-        type: 'raster',
+      'ofm': {
+        type: 'vector',
         tiles: [
-          'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+          'https://a.tiles.openfreemap.org/planet/{z}/{x}/{y}',
+          'https://b.tiles.openfreemap.org/planet/{z}/{x}/{y}',
+          'https://c.tiles.openfreemap.org/planet/{z}/{x}/{y}'
         ],
-        tileSize: 256,
         minzoom: 0,
-        maxzoom: 16,
-        attribution: 'ESRI, HERE, Garmin, FAO, NOAA, USGS'
+        maxzoom: 14,
+        attribution: '© <a href="https://openfreemap.org">OpenFreeMap</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
       }
     },
-    layers: [{ id: 'background', type: 'raster', source: 'carto-dark' }]
+    layers: [
+      // ── Land (background) ──────────────────────────────────
+      { id: 'background', type: 'background', paint: { 'background-color': '#0d1520' } },
+      // ── Ocean / water bodies ───────────────────────────────
+      { id: 'water', type: 'fill', source: 'ofm', 'source-layer': 'water',
+        paint: { 'fill-color': '#060e18' } },
+      // ── Waterways (rivers/streams — faint context line) ────
+      { id: 'waterway', type: 'line', source: 'ofm', 'source-layer': 'waterway',
+        paint: { 'line-color': '#0a1828', 'line-width': 0.6 } },
+      // ── Parks / green landuse ──────────────────────────────
+      { id: 'landuse-green', type: 'fill', source: 'ofm', 'source-layer': 'landuse',
+        filter: ['in', 'class', 'grass', 'park', 'pitch', 'garden', 'cemetery', 'forest', 'wood'],
+        paint: { 'fill-color': '#0a1218', 'fill-opacity': 0.9 } },
+      // ── Residential ───────────────────────────────────────
+      { id: 'landuse-residential', type: 'fill', source: 'ofm', 'source-layer': 'landuse',
+        filter: ['in', 'class', 'residential', 'suburb', 'neighbourhood'],
+        minzoom: 8,
+        paint: { 'fill-color': '#0f1922', 'fill-opacity': 0.8 } },
+      // ── Roads (major, faint) ───────────────────────────────
+      { id: 'road-major', type: 'line', source: 'ofm', 'source-layer': 'transportation',
+        filter: ['in', 'class', 'motorway', 'trunk', 'primary'],
+        minzoom: 7,
+        paint: { 'line-color': '#13202e',
+                 'line-width': ['interpolate', ['linear'], ['zoom'], 7, 0.5, 12, 1.5] } },
+      // ── Country borders ────────────────────────────────────
+      { id: 'border-country', type: 'line', source: 'ofm', 'source-layer': 'boundary',
+        filter: ['==', 'admin_level', 2],
+        paint: { 'line-color': '#243547', 'line-width': 1 } },
+      // ── State / territory borders ──────────────────────────
+      { id: 'border-state', type: 'line', source: 'ofm', 'source-layer': 'boundary',
+        filter: ['==', 'admin_level', 4],
+        minzoom: 3,
+        paint: { 'line-color': '#192535', 'line-width': 0.5, 'line-dasharray': [4, 4] } },
+      // ── City labels ────────────────────────────────────────
+      { id: 'place-city', type: 'symbol', source: 'ofm', 'source-layer': 'place',
+        filter: ['in', 'class', 'city'],
+        minzoom: 4,
+        layout: { 'text-field': ['get', 'name'], 'text-size': 11,
+                  'text-font': ['Open Sans Regular'], 'text-max-width': 8 },
+        paint: { 'text-color': '#3a5472', 'text-halo-color': '#0d1520', 'text-halo-width': 1.5 } },
+      // ── Town labels ────────────────────────────────────────
+      { id: 'place-town', type: 'symbol', source: 'ofm', 'source-layer': 'place',
+        filter: ['in', 'class', 'town'],
+        minzoom: 8,
+        layout: { 'text-field': ['get', 'name'], 'text-size': 10,
+                  'text-font': ['Open Sans Regular'], 'text-max-width': 6 },
+        paint: { 'text-color': '#2d4460', 'text-halo-color': '#0d1520', 'text-halo-width': 1 } }
+    ]
   },
   center: [134.0, -25.5],
   zoom: 4,
