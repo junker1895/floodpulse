@@ -776,8 +776,12 @@ map.on('load', () => {
     }
   });
 
-  // Place gauge markers after map loads
-  placeGaugeMarkers();
+  // Place gauge markers once map is truly idle
+  map.once('idle', () => {
+    placeGaugeMarkers();
+    console.log('[MAP] idle - markers placed, canvas:', map.getCanvas().width, 'x', map.getCanvas().height);
+    console.log('[MAP] container:', map.getContainer().offsetWidth, 'x', map.getContainer().offsetHeight);
+  });
 
   // Radar after map loads
   loadRainViewerData();
@@ -960,7 +964,9 @@ async function fetchGaugeData() {
   renderGaugeList();
   updateVerdict(highestRisk, maxPct);
   updateAlerts(alertData);
-  // Re-anchor markers after data load to fix any coordinate drift
+  // Re-anchor markers after data load
+  console.log('[GAUGE] re-anchoring, canvas:', map.getCanvas().width, 'x', map.getCanvas().height);
+  console.log('[GAUGE] container:', map.getContainer().offsetWidth, 'x', map.getContainer().offsetHeight);
   gaugeMarkers.forEach((m, i) => {
     const g = gaugeConfig[i];
     if (g) m.setLngLat([g.lng, g.lat]);
