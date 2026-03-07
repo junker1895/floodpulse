@@ -664,13 +664,13 @@ const map = new maplibregl.Map({
     sources: {
       'carto-dark': {
         type: 'raster',
-        tiles: ['https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
-                'https://b.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png',
-                'https://c.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png'],
+        tiles: [
+          'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'
+        ],
         tileSize: 256,
         minzoom: 0,
-        maxzoom: 19,
-        attribution: '© OpenStreetMap © CARTO'
+        maxzoom: 16,
+        attribution: 'ESRI, HERE, Garmin, FAO, NOAA, USGS'
       }
     },
     layers: [{ id: 'background', type: 'raster', source: 'carto-dark' }]
