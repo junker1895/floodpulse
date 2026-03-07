@@ -683,7 +683,8 @@ const map = new maplibregl.Map({
 });
 
 
-// No manual resize needed - MapLibre handles this automatically
+// ResizeObserver keeps MapLibre canvas in sync with actual container size
+new ResizeObserver(() => map.resize()).observe(map.getContainer());
 
 // ══════════════════════════════════════════
 //  RIVERS — PMTiles vector layer
@@ -775,12 +776,7 @@ map.on('load', () => {
   });
 
   // Place gauge markers once map is truly idle
-  map.once('idle', () => {
-    placeGaugeMarkers();
-    const r = map.getContainer().getBoundingClientRect();
-    console.log('[MAP] idle - canvas:', map.getCanvas().width, 'x', map.getCanvas().height);
-    console.log('[MAP] container rect:', Math.round(r.left), Math.round(r.top), Math.round(r.width), 'x', Math.round(r.height));
-  });
+  map.once('idle', () => { initGaugeLayers(); });
 
   // Radar after map loads
   loadRainViewerData();
@@ -824,86 +820,104 @@ const gaugeConfig = [
 
 let activeState = 'QLD';
 const gaugeCache = {};
-const gaugeMarkers = [];
-const gaugePopups = [];
 
-function placeGaugeMarkers() {
-  gaugeConfig.forEach((g, i) => {
-    const el = document.createElement('div');
-    el.className = 'fw-marker low';
-    el.id = `marker-${i}`;
-    el.textContent = '~';
-
-    const popup = new maplibregl.Popup({ offset: 18, maxWidth: '240px' })
-      .setHTML(`<div class="popup-title">📍 ${g.name}</div><div style="color:var(--muted);font-size:11px;font-family:'JetBrains Mono',monospace">${g.state} · ${g.river}<br>Loading…</div>`);
-
-    const marker = new maplibregl.Marker({ element: el })
-      .setLngLat([g.lng, g.lat])
-      .setPopup(popup)
-      .addTo(map);
-
-    gaugeMarkers.push(marker);
-    gaugePopups.push(popup);
-  });
-}
-
-function switchState(state, btn) {
-  activeState = state;
-  document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  const centres = {
-    QLD:[-22.5, 144.0, 6], NSW:[-32.0, 147.0, 6], VIC:[-36.8, 144.5, 6],
-    WA: [-25.0, 121.0, 5], SA: [-30.0, 135.5, 6], NT: [-19.0, 133.5, 6]
+// ── Gauge markers as MapLibre GeoJSON source (no DOM drift) ──
+function gaugeGeoJSON(dataMap = {}) {
+  return {
+    type: 'FeatureCollection',
+    features: gaugeConfig.map((g, i) => {
+      const d = dataMap[i] || {};
+      return {
+        type: 'Feature',
+        id: i,
+        geometry: { type: 'Point', coordinates: [g.lng, g.lat] },
+        properties: {
+          id: i,
+          name: g.name,
+          river: g.river,
+          state: g.state,
+          risk: d.risk || 'low',
+          symbol: d.risk === 'high' ? '⚠' : d.risk === 'mid' ? '~' : '✓',
+          discharge: d.discharge != null ? d.discharge.toFixed(1) + ' m³/s' : '…',
+          pct: d.pct != null ? d.pct + '%' : '…',
+          rateStr: d.rateStr || '',
+          tomorrow: d.tomorrow != null ? d.tomorrow.toFixed(1) + ' m³/s' : '…'
+        }
+      };
+    })
   };
-  const [lat, lng, zoom] = centres[state];
-  map.flyTo({ center: [lng, lat], zoom, duration: 1200 });
-  renderGaugeList();
 }
 
-function renderGaugeList() {
-  const list = document.getElementById('gaugeList');
-  if (!list) return;
-  list.innerHTML = '';
-  gaugeConfig.forEach((g, i) => {
-    if (g.state !== activeState) return;
-    const cached = gaugeCache[i];
-    const risk  = cached ? cached.risk  : 'low';
-    const pct   = cached ? cached.pct   : 0;
-    const lvl   = cached ? cached.discharge.toFixed(0)+' m³/s' : '—';
-    const rate  = cached ? cached.rateStr : '…';
-    const trend = cached ? cached.trend : '➡';
-    const rc2   = { high:'#ff4f4f', mid:'#f5c542', low:'#22d98a' }[risk];
-    const base  = { high:'255,79,79', mid:'245,197,66', low:'34,217,138' }[risk];
-    const el = document.createElement('div');
-    el.className = 'gauge';
-    el.setAttribute('onclick', `focusGauge(this,${g.lat},${g.lng})`);
-    el.innerHTML = `
-      <div class="g-ico" style="background:rgba(${base},.1)">🌊</div>
-      <div class="g-info">
-        <div class="g-name">${g.name} <span style="color:var(--muted);font-size:9px">${g.river}</span></div>
-        <div class="g-bar-row"><div class="g-bar"><div class="g-fill" style="width:${pct}%;background:${rc2}"></div></div><div class="g-pct" style="color:${rc2}">${pct}%</div></div>
-      </div>
-      <div class="g-trend">${trend}</div>
-      <div class="g-lvl" style="color:${rc2}"><span class="gv">${lvl}</span><span class="gu">${rate}</span></div>`;
-    list.appendChild(el);
+function initGaugeLayers() {
+  map.addSource('gauges', { type: 'geojson', data: gaugeGeoJSON() });
+
+  // Circle background
+  map.addLayer({
+    id: 'gauge-circle',
+    type: 'circle',
+    source: 'gauges',
+    paint: {
+      'circle-radius': 14,
+      'circle-color': [
+        'match', ['get', 'risk'],
+        'high', '#ff4545',
+        'mid',  '#f5c542',
+        '#1fdb8a'
+      ],
+      'circle-opacity': 0.15,
+      'circle-stroke-width': 1.5,
+      'circle-stroke-color': [
+        'match', ['get', 'risk'],
+        'high', '#ff4545',
+        'mid',  '#f5c542',
+        '#1fdb8a'
+      ],
+      'circle-stroke-opacity': 0.9
+    }
   });
-}
-renderGaugeList();
 
-// ══════════════════════════════════════════
-//  GAUGE DATA — Open-Meteo Flood API
-// ══════════════════════════════════════════
-function classifyRisk(d, cfg) {
-  if (d >= cfg.floodThreshold * 0.75) return 'high';
-  if (d >= cfg.floodThreshold * 0.35) return 'mid';
-  return 'low';
-}
-function pctOfFlood(d, cfg) {
-  return Math.min(99, Math.max(1, Math.round((d - cfg.normalMin) / (cfg.floodThreshold - cfg.normalMin) * 100)));
-}
+  // Symbol label inside circle
+  map.addLayer({
+    id: 'gauge-symbol',
+    type: 'symbol',
+    source: 'gauges',
+    layout: {
+      'text-field': ['get', 'symbol'],
+      'text-size': 11,
+      'text-allow-overlap': true,
+      'text-ignore-placement': true
+    },
+    paint: {
+      'text-color': [
+        'match', ['get', 'risk'],
+        'high', '#ff4545',
+        'mid',  '#f5c542',
+        '#1fdb8a'
+      ]
+    }
+  });
 
-const statusStyle = { high:'background:rgba(255,79,79,.15);color:#ff6b6b;', mid:'background:rgba(245,197,66,.12);color:#f5c542;', low:'background:rgba(34,217,138,.1);color:#22d98a;' };
-const statusLabel = { high:'⚠ High Risk — Rising', mid:'~ Moderate — Monitor', low:'✓ Low — Normal' };
+  // Click popup
+  map.on('click', 'gauge-circle', e => {
+    const p = e.features[0].properties;
+    const coords = e.features[0].geometry.coordinates.slice();
+    new maplibregl.Popup({ offset: 18, maxWidth: '240px' })
+      .setLngLat(coords)
+      .setHTML(`
+        <div class="popup-title">📍 ${p.name}</div>
+        <div class="popup-row"><span>${p.state} · ${p.river}</span></div>
+        <div class="popup-row"><span>Discharge</span><span>${p.discharge}</span></div>
+        <div class="popup-row"><span>Change</span><span>${p.rateStr || '—'}</span></div>
+        <div class="popup-row"><span>Flood capacity</span><span>${p.pct}</span></div>
+        <div class="popup-row"><span>Tomorrow fcst</span><span>${p.tomorrow}</span></div>
+        <div class="popup-status" style="${statusStyle[p.risk]}">${statusLabel[p.risk]}</div>
+      `)
+      .addTo(map);
+  });
+
+  map.on('mouseenter', 'gauge-circle', () => map.getCanvas().style.cursor = 'pointer');
+  map.on('mouseleave', 'gauge-circle', () => map.getCanvas().style.cursor = '');
+}
 
 async function fetchGaugeData() {
   const batchSize = 5;
@@ -925,52 +939,71 @@ async function fetchGaugeData() {
 
   results.forEach(({ i, g, data }) => {
     if (!data || !data.daily) return;
-    const dis = data.daily.river_discharge;
+    const dis       = data.daily.river_discharge;
     const today     = dis[2] || dis[0];
     const yesterday = dis[1] || today;
     const tomorrow  = dis[3] || today;
     const risk      = classifyRisk(today, g);
     const pct       = pctOfFlood(today, g);
-    const trend     = today > yesterday * 1.05 ? '📈' : today < yesterday * 0.95 ? '📉' : '➡';
     const rateVal   = today - yesterday;
     const rateStr   = rateVal > 0.5 ? `+${rateVal.toFixed(0)}m³/s` : rateVal < -0.5 ? `${rateVal.toFixed(0)}m³/s` : 'stable';
 
-    gaugeCache[i] = { risk, pct, discharge: today, rateStr, trend, tomorrow };
+    gaugeCache[i] = { risk, pct, discharge: today, rateStr, tomorrow };
 
     if (risk === 'high' || (risk === 'mid' && highestRisk === 'low')) highestRisk = risk;
     if (pct > maxPct) maxPct = pct;
-
-    const sym = { high:'⚠', mid:'~', low:'✓' }[risk];
-    const el = document.getElementById(`marker-${i}`);
-    if (el) { el.className = `fw-marker ${risk}`; el.textContent = sym; }
-
-    gaugePopups[i].setHTML(`
-      <div class="popup-title">📍 ${g.name}</div>
-      <div class="popup-row"><span>${g.state} · ${g.river}</span></div>
-      <div class="popup-row"><span>Discharge</span><span>${today.toFixed(1)} m³/s</span></div>
-      <div class="popup-row"><span>Change</span><span>${rateStr}</span></div>
-      <div class="popup-row"><span>Flood capacity</span><span>${pct}%</span></div>
-      <div class="popup-row"><span>Tomorrow fcst</span><span>${tomorrow.toFixed(1)} m³/s</span></div>
-      <div class="popup-status" style="${statusStyle[risk]}">${statusLabel[risk]}</div>
-    `);
-
-    // Update river colours on map (only if high risk at any gauge)
-    // colours are updated globally after all results processed below
-
     alertData.push({ name: g.name, river: g.river, state: g.state, risk });
   });
+
+  // Update GeoJSON source in one shot - no DOM markers to drift
+  if (map.getSource('gauges')) {
+    map.getSource('gauges').setData(gaugeGeoJSON(gaugeCache));
+  }
 
   renderGaugeList();
   updateVerdict(highestRisk, maxPct);
   updateAlerts(alertData);
-  // Re-anchor markers after data load
-  const rg = map.getContainer().getBoundingClientRect();
-  console.log('[GAUGE] canvas:', map.getCanvas().width, 'x', map.getCanvas().height);
-  console.log('[GAUGE] container rect:', Math.round(rg.left), Math.round(rg.top), Math.round(rg.width), 'x', Math.round(rg.height));
-  gaugeMarkers.forEach((m, i) => {
-    const g = gaugeConfig[i];
-    if (g) m.setLngLat([g.lng, g.lat]);
-  });
+}
+}
+
+let activeState = 'QLD';
+
+function switchState(state, btn) {
+  activeState = state;
+  document.querySelectorAll('.stab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderGaugeList();
+}
+
+function renderGaugeList() {
+  const list = document.getElementById('gaugeList');
+  if (!list) return;
+  const filtered = gaugeConfig.map((g, i) => ({ g, i })).filter(({ g }) => g.state === activeState);
+  list.innerHTML = filtered.map(({ g, i }) => {
+    const d = gaugeCache[i] || {};
+    const risk = d.risk || 'low';
+    const dis = d.discharge != null ? d.discharge.toFixed(1) : '—';
+    const pct = d.pct != null ? d.pct : '—';
+    const rateStr = d.rateStr || '';
+    const color = risk === 'high' ? '#ff4545' : risk === 'mid' ? '#f5c542' : '#1fdb8a';
+    return `<div class="gauge-row" onclick="flyToGauge(${i})">
+      <div class="gr-dot" style="background:${color}"></div>
+      <div class="gr-info">
+        <div class="gr-name">${g.name} <span class="gr-river">${g.river}</span></div>
+        <div class="gr-sub">${g.state}</div>
+      </div>
+      <div class="gr-val">
+        <div class="gr-dis" style="color:${color}">${dis} <span>m³/s</span></div>
+        <div class="gr-bar"><div class="gr-fill" style="width:${Math.min(100,pct||0)}%;background:${color}"></div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function flyToGauge(i) {
+  const g = gaugeConfig[i];
+  if (!g) return;
+  map.flyTo({ center: [g.lng, g.lat], zoom: 10, duration: 1000 });
 }
 
 function updateVerdict(risk, pct) {
@@ -1225,10 +1258,11 @@ function togglePill(el, layer) {
     if (map.getLayer('zones-line')) map.setLayoutProperty('zones-line', 'visibility', vis);
   }
   if (layer === 'gauges') {
-    gaugeMarkers.forEach(m => {
-      m.getElement().style.display = layerState.gauges ? '' : 'none';
+    const vis = layerState.gauges ? 'visible' : 'none';
+    ['gauge-circle', 'gauge-symbol'].forEach(id => {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', vis);
     });
-  }
+    }
   if (layer === 'radar') {
     if (layerState.radar) { showFrame(animationPosition, false); }
     else {
