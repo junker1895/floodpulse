@@ -30,6 +30,7 @@
   --text2:   #7a9abd;
   --muted:   #3a5570;
   --nav-h:   54px;
+  --river-bar-h: 40px;
   --sb-w:    310px;
   --sheet-peek: 190px;
   --radius:  12px;
@@ -64,6 +65,54 @@ nav {
 .logo span { color:var(--text2); font-weight:400; font-size:12px; margin-left:2px; font-family:'JetBrains Mono',monospace; }
 
 .search-wrap { flex:1; margin:0 14px; position:relative; max-width:360px; }
+
+/* ── RIVER SEARCH BAR ── */
+.river-bar {
+  position:fixed; top:var(--nav-h); left:0; right:0; height:var(--river-bar-h);
+  background:rgba(4,7,14,0.97);
+  border-bottom:1px solid rgba(74,168,255,.12);
+  display:flex; align-items:center; justify-content:center;
+  padding:0 16px; z-index:999;
+  backdrop-filter:blur(16px);
+}
+.river-search-wrap { position:relative; width:100%; max-width:420px; }
+.river-search-input {
+  width:100%; background:rgba(11,18,32,0.85);
+  border:1px solid rgba(74,168,255,.18);
+  border-radius:8px; padding:6px 32px 6px 30px;
+  font-family:'JetBrains Mono',monospace; font-size:11px;
+  color:var(--text); outline:none;
+  transition:border-color .2s, background .2s;
+}
+.river-search-input::placeholder { color:var(--muted); }
+.river-search-input:focus { border-color:rgba(74,168,255,.4); background:rgba(11,18,32,1); }
+.river-search-input.active { border-color:rgba(74,168,255,.5); background:rgba(11,18,32,1); color:var(--blue); }
+.river-search-icon { position:absolute; left:9px; top:50%; transform:translateY(-50%); font-size:11px; pointer-events:none; opacity:.5; }
+.river-search-clear {
+  position:absolute; right:9px; top:50%; transform:translateY(-50%);
+  font-size:13px; cursor:pointer; color:var(--muted); display:none; line-height:1;
+}
+.river-search-clear.visible { display:block; }
+.river-search-clear:hover { color:var(--text); }
+.river-search-results {
+  position:absolute; top:calc(100% + 5px); left:0; right:0;
+  background:rgba(6,10,20,0.99); border:1px solid rgba(74,168,255,.2);
+  border-radius:10px; overflow:hidden; display:none; z-index:2000;
+  box-shadow:0 12px 40px rgba(0,0,0,.8);
+}
+.river-search-results.open { display:block; }
+.rsr-item {
+  padding:9px 13px; cursor:pointer; font-size:11px;
+  font-family:'JetBrains Mono',monospace;
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:8px;
+  transition:background .12s;
+}
+.rsr-item:last-child { border-bottom:none; }
+.rsr-item:hover { background:rgba(74,168,255,.1); }
+.rsr-name { color:var(--text); }
+.rsr-sub { color:var(--muted); font-size:9px; }
+.rsr-selected { background:rgba(74,168,255,.07) !important; border-left:2px solid var(--blue); }
 .search-input {
   width:100%;
   background:rgba(11,18,32,0.9);
@@ -96,6 +145,8 @@ nav {
 .sr-item .sr-name { color:var(--text); }
 .sr-item .sr-sub { color:var(--muted); font-size:9.5px; }
 
+
+
 .nav-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
 .live-badge {
   display:flex; align-items:center; gap:5px;
@@ -117,7 +168,7 @@ nav {
 @media (max-width:480px) { .clock { display:none; } }
 
 /* ── LAYOUT ── */
-.app { display:flex; flex-direction:row; height:calc(100vh - var(--nav-h)); margin-top:var(--nav-h); }
+.app { display:flex; flex-direction:row; height:calc(100vh - var(--nav-h) - var(--river-bar-h)); margin-top:calc(var(--nav-h) + var(--river-bar-h)); }
 #map { flex:1; min-width:0; position:relative; }
 .maplibregl-ctrl-attrib { display:none !important; }
 .maplibregl-ctrl-logo { display:none !important; }
@@ -178,6 +229,27 @@ nav {
 }
 .layer-pill:hover { color:var(--text2); border-color:rgba(74,168,255,.25); }
 .layer-pill.on { border-color:rgba(74,168,255,.35); color:var(--blue); background:rgba(74,168,255,.08); }
+
+
+/* ── RIVER DEBUG PANEL ── */
+#riverDebug {
+  position:absolute; bottom:58px; left:14px; z-index:600;
+  background:rgba(5,8,14,0.94); border:1px solid rgba(74,168,255,.28);
+  border-radius:12px; padding:10px 14px; width:265px;
+  font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text2);
+  backdrop-filter:blur(12px); display:none; flex-direction:column; gap:8px;
+}
+#riverDebug.visible { display:flex; }
+#riverDebug .rd-title { color:var(--blue); font-size:9px; letter-spacing:.8px; text-transform:uppercase; display:flex; justify-content:space-between; align-items:center; }
+#riverDebug .rd-close { cursor:pointer; color:var(--muted); font-size:13px; }
+#riverDebug .rd-close:hover { color:var(--text); }
+#riverDebug .rd-stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; }
+#riverDebug .rd-stat { background:rgba(74,168,255,.05); border:1px solid rgba(74,168,255,.1); border-radius:6px; padding:5px 4px; text-align:center; }
+#riverDebug .rd-stat-val { color:var(--blue); font-size:13px; font-weight:600; }
+#riverDebug .rd-stat-lbl { color:var(--muted); font-size:8px; margin-top:1px; }
+#riverDebug .rd-mode { font-size:9px; text-align:center; padding:4px 6px; border-radius:5px; }
+#riverDebug .rd-mode.ne { background:rgba(126,200,255,.1); color:#7ec8ff; }
+#riverDebug .rd-mode.pm { background:rgba(31,219,138,.1); color:var(--low); }
 
 /* ── RADAR TIMESTAMP ── */
 #radarTimestamp {
@@ -496,7 +568,7 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
   </div>
   <div class="search-wrap">
     <span class="search-icon">🔍</span>
-    <input class="search-input" id="searchInput" type="text" placeholder="Search suburb or river…" autocomplete="off">
+    <input class="search-input" id="searchInput" type="text" placeholder="Search suburb or address…" autocomplete="off">
     <div class="search-results" id="searchResults"></div>
   </div>
   <div class="nav-right">
@@ -504,6 +576,17 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
     <div class="live-badge">LIVE</div>
   </div>
 </nav>
+
+<!-- RIVER SEARCH BAR -->
+<div class="river-bar">
+  <div class="river-search-wrap">
+    <span class="river-search-icon">〰</span>
+    <input class="river-search-input" id="riverSearchInput" type="text"
+      placeholder="Search rivers by name…" autocomplete="off" spellcheck="false">
+    <span class="river-search-clear" id="riverSearchClear">✕</span>
+    <div class="river-search-results" id="riverSearchResults"></div>
+  </div>
+</div>
 
 <div class="app">
   <!-- MAP -->
@@ -524,12 +607,22 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
       <div class="rr-div"></div>
       <div class="rr-item"><div class="rr-val rr-risk-low" id="s-risk">--</div><div class="rr-lbl">risk</div></div>
     </div>
+    <div id="riverDebug">
+      <div class="rd-title"><span>⚙ River Debug</span><span class="rd-close" onclick="document.getElementById('riverDebug').classList.remove('visible')">✕</span></div>
+      <div class="rd-stats">
+        <div class="rd-stat"><div class="rd-stat-val" id="rdSrVal">—</div><div class="rd-stat-lbl">SCALERANK</div></div>
+        <div class="rd-stat"><div class="rd-stat-val" id="rdZoom">—</div><div class="rd-stat-lbl">ZOOM</div></div>
+        <div class="rd-stat"><div class="rd-stat-val" id="rdCount">—</div><div class="rd-stat-lbl">RIVERS</div></div>
+      </div>
+      <div class="rd-mode ne" id="rdMode">waiting…</div>
+    </div>
     <div class="layer-bar">
       <div class="layer-pill on" id="radarPill" onclick="togglePill(this,'radar')">🌧 Radar</div>
       <div class="layer-pill on" id="riversPill" onclick="togglePill(this,'rivers')">〰 Rivers</div>
       <div class="layer-pill on" id="zonesPill" onclick="togglePill(this,'zones')">🌊 Zones</div>
       <div class="layer-pill on" id="gaugesPill" onclick="togglePill(this,'gauges')">📍 Gauges</div>
       <div class="layer-pill" id="playPill" onclick="toggleRadarPlay()">▶ Animate</div>
+      <div class="layer-pill" id="debugPill" onclick="document.getElementById(`riverDebug`).classList.toggle(`visible`)">⚙ Debug</div>
     </div>
     <div class="map-legend">
       <div class="ml-title">FLOOD RISK</div>
@@ -691,7 +784,7 @@ map.once('load', () => {
 //  RIVERS — PMTiles vector layer
 // ══════════════════════════════════════════
 let riversVisible = true;
-const RIVER_LAYER_IDS = ['rivers-major', 'rivers-medium', 'rivers-minor'];
+const RIVER_LAYER_IDS = ['rivers-major', 'rivers-medium', 'rivers-minor', 'rivers-query-major', 'rivers-query-medium'];
 
 map.on('load', async () => {
   // Add PMTiles source using archive zoom metadata when available.
@@ -787,6 +880,62 @@ map.on('load', async () => {
       ]
     }
   });
+
+  // ── Ghost query layers ──────────────────────────────────────────────────────
+  // These are fully transparent layers with minzoom:0 whose only purpose is to
+  // make river geometry available to queryRenderedFeatures at every zoom level.
+  // Without them, queryRenderedFeatures returns nothing at low zoom because the
+  // visual layers either have a minzoom cutoff or the tile overzoom leaves too
+  // few simplified segments in the viewport.
+  map.addLayer({
+    id: 'rivers-query-major',
+    type: 'line',
+    source: 'rivers',
+    'source-layer': 'rivers',
+    minzoom: 0,
+    maxzoom: riversMaxZoom + 1,
+    filter: ['<=', ['coalesce', ['get', 'ORD_FLOW'], 99], 3],
+    paint: { 'line-color': '#000', 'line-opacity': 0, 'line-width': 1 }
+  });
+  map.addLayer({
+    id: 'rivers-query-medium',
+    type: 'line',
+    source: 'rivers',
+    'source-layer': 'rivers',
+    minzoom: 0,
+    maxzoom: riversMaxZoom + 1,
+    filter: ['all', ['>=', ['coalesce', ['get', 'ORD_FLOW'], 99], 4], ['<=', ['coalesce', ['get', 'ORD_FLOW'], 99], 5]],
+    paint: { 'line-color': '#000', 'line-opacity': 0, 'line-width': 1 }
+  });
+  // ───────────────────────────────────────────────────────────────────────────
+
+  // ── Natural Earth rivers — geometry stored directly on fetch ────────────────
+  // We parse ALL coords into window.NE_RIVERS at load time so the canvas can
+  // iterate every river at any zoom level — no querySourceFeatures needed.
+  // ne_10m has ~1600 rivers; scalerank <=8 keeps majors, skips tiny creeks.
+  window.NE_RIVERS = [];
+  (async () => {
+    try {
+      const r = await fetch('https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_lake_centerlines.geojson');
+      if (!r.ok) throw new Error(r.status);
+      const data = await r.json();
+      for (const f of data.features) {
+        const sr = f.properties.scalerank ?? f.properties.strokeorder ?? 5;
+        if (sr > 12) continue;
+        const w = Math.max(0.8, 6.5 - sr * 0.5); // rank1=6px rank12=0.5px
+        const add = (coords) => {
+          if (coords && coords.length >= 2)
+            window.NE_RIVERS.push({ coords, w, sr, name: f.properties.name || f.properties.NAME || null });
+        };
+        const g = f.geometry;
+        if (!g) continue;
+        if (g.type === 'LineString') add(g.coordinates);
+        else if (g.type === 'MultiLineString') g.coordinates.forEach(add);
+      }
+      console.log('NE rivers loaded:', window.NE_RIVERS.length, 'segments');
+    } catch(e) { console.warn('NE rivers load failed:', e); }
+  })();
+
 
 
   // Flood zone circles (as map layers)
@@ -1265,6 +1414,212 @@ searchInput.addEventListener('focus', () => {
 document.addEventListener('click', e => {
   if (!e.target.closest('.search-wrap')) searchResults.classList.remove('open');
 });
+// ── River search index (built from NE GeoJSON after load) ────────────────────
+// ══════════════════════════════════════════
+//  RIVER SEARCH — Overpass index + PMTiles visuals
+// ══════════════════════════════════════════
+
+// riverSearchIndex: name → { name, nameKey, bbox, centre }
+// Built from Overpass API on load — names + bboxes only, no geometry drawn
+const riverSearchIndex = new Map();
+let riverIndexReady = false;
+
+// PMTiles name property — still detected at runtime for tributary filtering
+let pmRiverNameProp = null;
+
+let selectedRiver = null;
+let selectedRiverEndpoints = new Set();
+
+// Detect PMTiles name prop from rendered features (for tributary logic)
+function detectNameProp(features) {
+  if (pmRiverNameProp !== null) return;
+  for (const f of features) {
+    const props = f.properties || {};
+    for (const k of ['name','NAME','Name','GEONAME','geoname','river_name','RIVER_NAME']) {
+      if (props[k] && typeof props[k] === 'string' && props[k].trim().length > 1) {
+        pmRiverNameProp = k;
+        console.log('[river] PMTiles name prop:', k);
+        return;
+      }
+    }
+  }
+}
+
+// Still ingest PM features for tributary proximity checks when river selected
+// (coords stored on selectedRiver only, not a global index)
+function ingestPMIndex(features) {
+  detectNameProp(features);
+  // If a river is selected, accumulate its PMTiles geometry for proximity checks
+  if (!selectedRiver || !pmRiverNameProp) return;
+  for (const f of features) {
+    const fname = (f.properties[pmRiverNameProp] || '').trim().toLowerCase();
+    if (fname !== selectedRiver.nameKey) continue;
+    const g = f.geometry;
+    const addC = (cs) => { if (cs && cs.length >= 2) selectedRiver.coords.push(cs); };
+    if (g.type === 'LineString') addC(g.coordinates);
+    else if (g.type === 'MultiLineString') g.coordinates.forEach(addC);
+  }
+}
+
+// ── Overpass fetch ────────────────────────────────────────────────────────────
+async function fetchRiverIndex() {
+  // Query all named waterways (rivers, streams) in Australia
+  const query = `[out:json][timeout:25];
+area["ISO3166-1"="AU"][admin_level=2]->.au;
+(
+  way["waterway"~"^(river|stream)$"]["name"](area.au);
+  relation["waterway"="river"]["name"](area.au);
+);
+out tags bb;`;
+  try {
+    const r = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(query)
+    });
+    if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    for (const el of data.elements) {
+      const name = (el.tags && el.tags.name || '').trim();
+      if (!name || name.length < 2) continue;
+      const key = name.toLowerCase();
+      if (riverSearchIndex.has(key)) continue; // keep first occurrence
+      // bbox from Overpass: { minlat, minlon, maxlat, maxlon }
+      const bb = el.bounds;
+      if (!bb) continue;
+      riverSearchIndex.set(key, {
+        name,
+        nameKey: key,
+        bbox: [bb.minlon, bb.minlat, bb.maxlon, bb.maxlat],
+        coords: []  // populated from PMTiles on select
+      });
+    }
+    riverIndexReady = true;
+    console.log('[river] Overpass index ready:', riverSearchIndex.size, 'rivers');
+  } catch(e) {
+    console.warn('[river] Overpass fetch failed:', e);
+    // Fallback: mark ready anyway so UI doesn't stay stuck
+    riverIndexReady = true;
+  }
+}
+fetchRiverIndex();
+
+// Check if a candidate segment is spatially close to the selected river
+// Uses bbox first as fast pre-filter, then point proximity
+function isNearSelectedRiver(coords, river) {
+  const THRESH = 0.15; // ~15km
+  const [w, s, e, n] = river.bbox;
+  // Fast bbox pre-filter: is this segment anywhere near the river's extent?
+  const c0 = coords[0], c1 = coords[coords.length - 1];
+  const segMinLng = Math.min(c0[0], c1[0]) - THRESH;
+  const segMaxLng = Math.max(c0[0], c1[0]) + THRESH;
+  const segMinLat = Math.min(c0[1], c1[1]) - THRESH;
+  const segMaxLat = Math.max(c0[1], c1[1]) + THRESH;
+  if (segMaxLng < w || segMinLng > e || segMaxLat < s || segMinLat > n) return false;
+  // Point proximity: check endpoints of candidate against sampled points on selected river
+  const pts = [c0, c1];
+  for (const [clng, clat] of pts) {
+    for (const selCoords of river.coords) {
+      for (let i = 0; i < selCoords.length; i += 4) {
+        const [slng, slat] = selCoords[i];
+        if (Math.abs(clng - slng) < THRESH && Math.abs(clat - slat) < THRESH) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function normalZoomThreshold(ord) {
+  if (ord <= 3) return 6;
+  if (ord <= 5) return 7;
+  return 8;
+}
+
+function selectRiver(river) {
+  // Reset coords — will be populated from PMTiles as tiles render
+  river = { ...river, coords: [], minOrd: 9 };
+  selectedRiver = river;
+  const rsi = document.getElementById('riverSearchInput');
+  const rsc = document.getElementById('riverSearchClear');
+  rsi.value = river.name;
+  rsi.classList.add('active');
+  rsc.classList.add('visible');
+  document.getElementById('riverSearchResults').classList.remove('open');
+  lastQuery = -Infinity;
+
+  // Zoom to bbox from Overpass, PMTiles draws the actual lines
+  if (river.bbox) {
+    const [w, s, e, n] = river.bbox;
+    const pad = 0.3;
+    map.fitBounds([[w-pad, s-pad],[e+pad, n+pad]], { duration: 1200, maxZoom: 10 });
+    map.once('moveend', () => { if (map.getZoom() < 6) map.easeTo({ zoom: 6, duration: 600 }); });
+  }
+}
+
+function clearRiverSelection() {
+  selectedRiver = null;
+  selectedRiverEndpoints = new Set();
+  const rsi = document.getElementById('riverSearchInput');
+  const rsc = document.getElementById('riverSearchClear');
+  rsi.value = '';
+  rsi.classList.remove('active');
+  rsc.classList.remove('visible');
+  lastQuery = -Infinity;
+}
+
+// River search bar wiring
+const riverSearchInput   = document.getElementById('riverSearchInput');
+const riverSearchResults = document.getElementById('riverSearchResults');
+const riverSearchClear   = document.getElementById('riverSearchClear');
+let riverSearchTimer;
+
+riverSearchInput.addEventListener('input', () => {
+  clearTimeout(riverSearchTimer);
+  const q = riverSearchInput.value.trim();
+  if (!q) { riverSearchResults.classList.remove('open'); return; }
+  riverSearchTimer = setTimeout(() => doRiverSearch(q), 200);
+});
+riverSearchInput.addEventListener('focus', () => {
+  const q = riverSearchInput.value.trim();
+  if (q.length >= 1) doRiverSearch(q);
+});
+riverSearchClear.addEventListener('click', clearRiverSelection);
+document.addEventListener('click', e => {
+  if (!e.target.closest('.river-search-wrap')) riverSearchResults.classList.remove('open');
+  if (e.target.closest('#map') && selectedRiver) clearRiverSelection();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && selectedRiver) clearRiverSelection();
+});
+
+function doRiverSearch(q) {
+  const ql = q.toLowerCase();
+  riverSearchResults.innerHTML = '';
+
+  if (!riverIndexReady) {
+    riverSearchResults.innerHTML = '<div class="rsr-item"><span class="rsr-name" style="color:var(--muted)">Loading river index…</span></div>';
+    riverSearchResults.classList.add('open');
+    return;
+  }
+
+  const all = [...riverSearchIndex.values()];
+  const startsWith = all.filter(r => r.nameKey.startsWith(ql));
+  const contains   = all.filter(r => !r.nameKey.startsWith(ql) && r.nameKey.includes(ql));
+  const results    = [...startsWith, ...contains].slice(0, 8);
+
+  if (!results.length) {
+    riverSearchResults.innerHTML = '<div class="rsr-item"><span class="rsr-name" style="color:var(--muted)">No rivers found</span></div>';
+  } else {
+    results.forEach(r => {
+      const el = document.createElement('div');
+      el.className = 'rsr-item' + (selectedRiver && selectedRiver.nameKey === r.nameKey ? ' rsr-selected' : '');
+      el.innerHTML = `<span>〰</span><div><div class="rsr-name">${r.name}</div></div>`;
+      el.onclick = () => selectRiver(r);
+      riverSearchResults.appendChild(el);
+    });
+  }
+  riverSearchResults.classList.add('open');
+}
+
 function doSearch(q) {
   fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ', Australia')}&format=json&limit=5&countrycodes=au`)
     .then(r => r.json())
@@ -1612,22 +1967,30 @@ function showAddrResult(cls, verdict, detail) {
   result.scrollIntoView({ behavior:'smooth', block:'nearest' });
 }
 
+
+
 // ══════════════════════════════════════════
-//  RIVER FLOW ANIMATION — Variation B: Bold
+//  RIVER FLOW ANIMATION
 // ══════════════════════════════════════════
 (function () {
   const cvs = document.getElementById('riverCanvas');
-  const ctx = cvs.getContext('2d');
+  const ctx  = cvs.getContext('2d');
 
   const DASH_LEN    = 16;
   const GAP_LEN     = 26;
   const DASH_PERIOD = DASH_LEN + GAP_LEN;
 
-  // Stable per-path dash start offsets (keyed by first coord hash)
   const flowOffsets = new Map();
+  let cachedPaths   = [];
+  let lastQuery     = -Infinity;
+  // Accumulator: grows as tiles load, never cleared in PMTiles mode.
+  // Drawing is capped per-frame so it never lags regardless of size.
+  const tileGeom = new Map();
 
-  let cachedPaths    = [];
-  let lastQuery      = -Infinity;
+  // Persistent accumulator: segments added each render, never removed.
+  // Prevents rivers disappearing when zooming in further narrows viewport.
+
+  // ── helpers ────────────────────────────────────────────────────────────────
 
   function riskForCoord(lng, lat) {
     let minD = Infinity, risk = 'low';
@@ -1635,67 +1998,75 @@ function showAddrResult(cls, verdict, detail) {
       const d = (lat - g.lat) ** 2 + (lng - g.lng) ** 2;
       if (d < minD) { minD = d; risk = (gaugeCache[i] || {}).risk || 'low'; }
     });
-    return minD < 2.25 ? risk : 'low'; // within ~1.5° ≈ 150 km
+    return minD < 4.0 ? risk : 'low';
   }
 
   function colorOf(risk) {
     return risk === 'high' ? '#ef4444' : risk === 'mid' ? '#f59e0b' : '#4aa8ff';
   }
 
-  function widthOf(ord) {
-    return ord <= 1 ? 3.0 : ord === 2 ? 2.2 : ord === 3 ? 1.6 : ord === 4 ? 1.2 : 0.8;
+  // Width scales with zoom so rivers look right at every extent
+  function widthOf(ord, zoom) {
+    const zoomScale = Math.max(0.5, Math.min(2.5, zoom / 5));
+    // Main rivers (ord 1-2) are much thicker; tributaries taper off sharply
+    const base = ord <= 1 ? 6.0
+               : ord === 2 ? 4.0
+               : ord === 3 ? 2.4
+               : ord === 4 ? 1.4
+               : ord === 5 ? 0.9
+               : 0.6;  // ord 6+ (minor tributaries)
+    return base * zoomScale;
+  }
+
+  // NE scalerank → width (used at low zoom, no zoom scaling needed)
+  function neWidth(sr) {
+    return Math.max(0.8, 6.0 - sr * 0.45);
   }
 
   function ptAtT(pts, t) {
-    let total = 0;
-    const lens = [];
+    let total = 0, lens = [];
     for (let i = 1; i < pts.length; i++) {
-      const dx = pts[i][0] - pts[i-1][0], dy = pts[i][1] - pts[i-1][1];
-      lens.push(Math.sqrt(dx*dx + dy*dy));
-      total += lens[i-1];
+      const dx = pts[i][0]-pts[i-1][0], dy = pts[i][1]-pts[i-1][1];
+      lens.push(Math.sqrt(dx*dx+dy*dy)); total += lens[i-1];
     }
-    if (total === 0) return pts[0];
+    if (!total) return pts[0];
     let target = t * total, walked = 0;
     for (let i = 0; i < lens.length; i++) {
       if (walked + lens[i] >= target) {
-        const f = (target - walked) / lens[i];
-        return [
-          pts[i][0] + (pts[i+1][0] - pts[i][0]) * f,
-          pts[i][1] + (pts[i+1][1] - pts[i][1]) * f
-        ];
+        const f = (target-walked)/lens[i];
+        return [pts[i][0]+(pts[i+1][0]-pts[i][0])*f, pts[i][1]+(pts[i+1][1]-pts[i][1])*f];
       }
       walked += lens[i];
     }
-    return pts[pts.length - 1];
+    return pts[pts.length-1];
   }
 
   function segLen(pts) {
     let l = 0;
     for (let i = 1; i < pts.length; i++) {
-      const dx = pts[i][0] - pts[i-1][0], dy = pts[i][1] - pts[i-1][1];
-      l += Math.sqrt(dx*dx + dy*dy);
+      const dx=pts[i][0]-pts[i-1][0], dy=pts[i][1]-pts[i-1][1];
+      l += Math.sqrt(dx*dx+dy*dy);
     }
     return l;
   }
+
+  // ── draw ───────────────────────────────────────────────────────────────────
 
   function drawDashes(pts, color, lineW, offsetFrac, alpha) {
     const totalLen = segLen(pts);
     if (totalLen < 4) return;
     const startOff = offsetFrac * DASH_PERIOD;
-    ctx.strokeStyle = color;
-    ctx.lineWidth   = lineW;
-    ctx.lineCap     = 'round';
-    ctx.lineJoin    = 'round';
-    ctx.globalAlpha = alpha;
-    ctx.shadowBlur  = 0;
-    for (let d = -DASH_PERIOD + startOff; d < totalLen; d += DASH_PERIOD) {
-      const t0 = Math.max(0, d) / totalLen;
-      const t1 = Math.min(totalLen, d + DASH_LEN) / totalLen;
+    ctx.strokeStyle=color; ctx.lineWidth=lineW;
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.globalAlpha=alpha; ctx.shadowBlur=0;
+    for (let d = -DASH_PERIOD+startOff; d < totalLen; d += DASH_PERIOD) {
+      const t0 = Math.max(0,d)/totalLen;
+      const t1 = Math.min(totalLen,d+DASH_LEN)/totalLen;
       if (t1 <= t0) continue;
       ctx.beginPath();
-      for (let s = 0; s <= 6; s++) {
-        const p = ptAtT(pts, t0 + (t1 - t0) * (s / 6));
-        s === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]);
+      for (let s=0; s<=6; s++) {
+        const p = ptAtT(pts, t0+(t1-t0)*(s/6));
+        s===0 ? ctx.moveTo(p[0],p[1]) : ctx.lineTo(p[0],p[1]);
       }
       ctx.stroke();
     }
@@ -1703,104 +2074,249 @@ function showAddrResult(cls, verdict, detail) {
 
   function drawPath(pts, color, lineW, offsetFrac, risk, pulse) {
     if (pts.length < 2) return;
-
-    // Bold glow for non-low risk (Variation B)
     if (risk !== 'low') {
-      ctx.beginPath();
-      ctx.moveTo(pts[0][0], pts[0][1]);
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-      ctx.strokeStyle = color;
-      ctx.lineWidth   = risk === 'high' ? lineW + pulse * 20 : lineW + 10;
-      ctx.lineCap     = 'round';
-      ctx.globalAlpha = risk === 'high' ? pulse * 0.22 : 0.10;
-      ctx.shadowColor = color;
-      ctx.shadowBlur  = risk === 'high' ? pulse * 30 : 15;
-      ctx.stroke();
-      ctx.shadowBlur  = 0;
+      ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
+      for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0],pts[i][1]);
+      ctx.strokeStyle=color;
+      ctx.lineWidth = risk==='high' ? lineW+pulse*20 : lineW+10;
+      ctx.lineCap='round';
+      ctx.globalAlpha = risk==='high' ? pulse*0.22 : 0.10;
+      ctx.shadowColor=color; ctx.shadowBlur=risk==='high'?pulse*30:15;
+      ctx.stroke(); ctx.shadowBlur=0;
     }
-
-    // Dim base line
-    ctx.beginPath();
-    ctx.moveTo(pts[0][0], pts[0][1]);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-    ctx.strokeStyle = color;
-    ctx.lineWidth   = lineW;
-    ctx.lineCap     = 'round';
-    ctx.globalAlpha = risk === 'low' ? 0.12 : 0.20;
-    ctx.shadowBlur  = 0;
-    ctx.stroke();
-
-    // Moving dashes
-    const dashAlpha = risk === 'high' ? 0.8 + pulse * 0.2 : risk === 'mid' ? 0.7 : 0.75;
-    drawDashes(pts, color, lineW, offsetFrac, dashAlpha);
+    ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
+    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0],pts[i][1]);
+    ctx.strokeStyle=color; ctx.lineWidth=lineW; ctx.lineCap='round';
+    ctx.globalAlpha = risk==='low' ? 0.12 : 0.20;
+    ctx.shadowBlur=0; ctx.stroke();
+    drawDashes(pts, color, lineW, offsetFrac,
+      risk==='high' ? 0.8+pulse*0.2 : risk==='mid' ? 0.7 : 0.75);
   }
+
+  // ── refresh: build cachedPaths each frame cycle ────────────────────────────
 
   function refreshFeatures(ts) {
     if (!map.loaded()) return;
-    const features = map.queryRenderedFeatures({ layers: RIVER_LAYER_IDS });
-    // Prioritise major rivers; cap total
-    features.sort((a, b) => (a.properties.ORD_FLOW || 9) - (b.properties.ORD_FLOW || 9));
+    const zoom = map.getZoom();
+    const NE   = window.NE_RIVERS || [];
+    const sel  = typeof selectedRiver !== 'undefined' ? selectedRiver : null;
 
-    const newPaths = [];
-    let count = 0;
-    for (const f of features) {
-      if (count >= 200) break;
-      const ord   = f.properties.ORD_FLOW || 5;
-      const lineW = widthOf(ord);
-      const addCoords = (coords) => {
+    // ── SELECTED RIVER MODE ──────────────────────────────────────────────────
+    if (sel) {
+      const paths = [];
+      const features = map.queryRenderedFeatures({ layers: RIVER_LAYER_IDS });
+      detectNameProp(features);
+      const seen = new Set();
+
+      const ingestSel = (coords, ord, isMain) => {
         if (!coords || coords.length < 2) return;
-        const mid  = coords[Math.floor(coords.length / 2)];
+        const k = `s:${coords[0][0].toFixed(2)},${coords[0][1].toFixed(2)},${coords[coords.length-1][0].toFixed(2)},${ord}`;
+        if (seen.has(k)) return;
+        seen.add(k);
+        if (!flowOffsets.has(k)) flowOffsets.set(k, Math.random());
+        const mid  = coords[Math.floor(coords.length/2)];
         const risk = riskForCoord(mid[0], mid[1]);
-        const key  = `${coords[0][0].toFixed(4)},${coords[0][1].toFixed(4)}`;
-        if (!flowOffsets.has(key)) flowOffsets.set(key, Math.random());
-        newPaths.push({ coords, lineW, risk, key });
-        count++;
+        paths.push({ coords, lineW: widthOf(ord, zoom), risk, key: k, isMain });
       };
-      const g = f.geometry;
-      if (g.type === 'LineString') addCoords(g.coordinates);
-      else if (g.type === 'MultiLineString') g.coordinates.forEach(addCoords);
-    }
-    cachedPaths = newPaths;
-    lastQuery   = ts;
-  }
 
-  function animate(ts) {
-    // Sync canvas pixel size
-    const mapEl = document.getElementById('map');
-    if (cvs.width !== mapEl.clientWidth)  cvs.width  = mapEl.clientWidth;
-    if (cvs.height !== mapEl.clientHeight) cvs.height = mapEl.clientHeight;
+      // First pass: find main river segments, accumulate their coords + minOrd
+      for (const f of features) {
+        if (!pmRiverNameProp) break;
+        const fname = (f.properties[pmRiverNameProp] || '').trim().toLowerCase();
+        if (fname !== sel.nameKey) continue;
+        const ord = f.properties.ORD_FLOW || 5;
+        if (ord < sel.minOrd) sel.minOrd = ord;
+        const g = f.geometry;
+        const addMain = (cs) => {
+          if (!cs || cs.length < 2) return;
+          ingestSel(cs, ord, true);
+          // Accumulate coords for proximity checks
+          if (!sel.coords.some(c => c === cs)) sel.coords.push(cs);
+        };
+        if (g.type === 'LineString') addMain(g.coordinates);
+        else if (g.type === 'MultiLineString') g.coordinates.forEach(addMain);
+      }
 
-    ctx.clearRect(0, 0, cvs.width, cvs.height);
+      // Second pass: tributaries — only if we have main river geometry to check against
+      if (sel.coords.length > 0) {
+        const selOrd = sel.minOrd;
+        for (const f of features) {
+          if (!pmRiverNameProp) break;
+          const fname = (f.properties[pmRiverNameProp] || '').trim().toLowerCase();
+          if (fname === sel.nameKey) continue; // already handled
+          const ord = f.properties.ORD_FLOW || 5;
+          // 1. ORD_FLOW within 2 steps of main river
+          if (ord > selOrd + 2) continue;
+          // 2. Normal zoom threshold must be met
+          if (zoom < normalZoomThreshold(ord)) continue;
+          // 3. Must be spatially close to selected river
+          const g = f.geometry;
+          const checkCoords = (cs) => {
+            if (!cs || cs.length < 2) return;
+            if (isNearSelectedRiver(cs, sel)) ingestSel(cs, ord, false);
+          };
+          if (g.type === 'LineString') checkCoords(g.coordinates);
+          else if (g.type === 'MultiLineString') g.coordinates.forEach(checkCoords);
+        }
+      }
 
-    if (!layerState.rivers) {
-      requestAnimationFrame(animate);
+      // NE fallback: if zoom < 6, show matching NE river as glowing main line
+      if (zoom < 6) {
+        for (let i = 0; i < NE.length; i++) {
+          const { coords, w, sr, name: nname } = NE[i];
+          if ((nname || '').toLowerCase() !== sel.nameKey) continue;
+          const k = 'ne:sel:'+i;
+          if (!flowOffsets.has(k)) flowOffsets.set(k, Math.random());
+          const mid  = coords[Math.floor(coords.length/2)];
+          const risk = riskForCoord(mid[0], mid[1]);
+          paths.push({ coords, lineW: w, risk, key: k, isMain: true });
+        }
+      }
+
+      cachedPaths = paths;
+      lastQuery = ts;
       return;
     }
 
-    if (ts - lastQuery > 500) refreshFeatures(ts);
+    // ── NORMAL MODE ──────────────────────────────────────────────────────────
+    if (zoom >= 6) {
+      // ── PMTiles mode ──────────────────────────────────────────────────────
+      // 1. Ingest newly rendered features into the persistent accumulator
+      const features = map.queryRenderedFeatures({ layers: RIVER_LAYER_IDS });
+      ingestPMIndex(features); // also keep building search index
+      for (const f of features) {
+        const ord = f.properties.ORD_FLOW || 5;
+        const ingest = (coords) => {
+          if (!coords || coords.length < 2) return;
+          const key = `t:${coords[0][0].toFixed(2)},${coords[0][1].toFixed(2)},${coords[coords.length-1][0].toFixed(2)},${coords[coords.length-1][1].toFixed(2)},${ord}`;
+          if (!tileGeom.has(key)) {
+            tileGeom.set(key, { coords, ord });
+            if (!flowOffsets.has(key)) flowOffsets.set(key, Math.random());
+          }
+        };
+        const g = f.geometry;
+        if (g.type === 'LineString') ingest(g.coordinates);
+        else if (g.type === 'MultiLineString') g.coordinates.forEach(ingest);
+      }
+
+      // 2. Draw from accumulator, sorted major-first, capped by zoom
+      const drawCap = (() => { const raw = Math.round(1000 * Math.pow(4, zoom - 6)); if (zoom > 7.4 && zoom < 11) return Math.round(1000 * Math.pow(4, 7.4 - 6)); if (zoom <= 7.4) return Math.round(1000 * Math.pow(4, 6.74 - 6)); return raw; })();
+
+      const sorted = [...tileGeom.values()].sort((a, b) => a.ord - b.ord);
+      const paths = [];
+      for (const { coords, ord } of sorted) {
+        if (paths.length >= drawCap) break;
+        const key = `t:${coords[0][0].toFixed(2)},${coords[0][1].toFixed(2)},${coords[coords.length-1][0].toFixed(2)},${coords[coords.length-1][1].toFixed(2)},${ord}`;
+        const mid  = coords[Math.floor(coords.length/2)];
+        const risk = riskForCoord(mid[0], mid[1]);
+        paths.push({ coords, lineW: widthOf(ord, zoom), risk, key });
+      }
+      cachedPaths = paths;
+
+      const cEl  = document.getElementById('rdCount'); if (cEl)  cEl.textContent = `${paths.length}/${tileGeom.size}`;
+      const zEl  = document.getElementById('rdZoom');  if (zEl)  zEl.textContent = zoom.toFixed(2);
+      const srEl = document.getElementById('rdSrVal'); if (srEl) srEl.textContent = drawCap;
+      const mEl  = document.getElementById('rdMode');
+      if (mEl) { mEl.textContent=`PMTILES — ${paths.length}/${tileGeom.size} @ z${zoom.toFixed(1)}`; mEl.className='rd-mode pm'; }
+
+    } else {
+      tileGeom.clear();
+      // ── NE mode: scalerank = round(zoom × 2), min 3 ──────────────────────
+      const maxSR = Math.max(3, Math.round(zoom * 2));
+      const paths = [];
+      for (let i = 0; i < NE.length; i++) {
+        const { coords, w, sr } = NE[i];
+        if (sr > maxSR) continue;
+        const key = 'ne:'+i;
+        if (!flowOffsets.has(key)) flowOffsets.set(key, Math.random());
+        const mid  = coords[Math.floor(coords.length/2)];
+        const risk = riskForCoord(mid[0], mid[1]);
+        paths.push({ coords, lineW: w, risk, key });
+      }
+      cachedPaths = paths;
+
+      const cEl  = document.getElementById('rdCount');  if (cEl)  cEl.textContent = paths.length;
+      const zEl  = document.getElementById('rdZoom');   if (zEl)  zEl.textContent = zoom.toFixed(2);
+      const srEl = document.getElementById('rdSrVal');  if (srEl) srEl.textContent = maxSR;
+      const mEl  = document.getElementById('rdMode');
+      if (mEl) { mEl.textContent=`NE \u2014 sr\u2264${maxSR} @ z${zoom.toFixed(1)}`; mEl.className='rd-mode ne'; }
+    }
+
+    lastQuery = ts;
+  }
+
+  // ── animation loop ─────────────────────────────────────────────────────────
+
+  function animate(ts) {
+    const mapEl = document.getElementById('map');
+    if (cvs.width  !== mapEl.clientWidth)  cvs.width  = mapEl.clientWidth;
+    if (cvs.height !== mapEl.clientHeight) cvs.height = mapEl.clientHeight;
+    ctx.clearRect(0, 0, cvs.width, cvs.height);
+
+    if (!layerState.rivers) { requestAnimationFrame(animate); return; }
+
+    // Refresh every 250 ms so zoom/pan changes respond quickly
+    if (ts - lastQuery > 250) refreshFeatures(ts);
 
     const t = ts / 1000;
+    // Slow gentle pulse for selected river glow
+    const selPulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 0.8);
+
     for (const path of cachedPaths) {
-      const pxPerSec   = path.risk === 'high' ? 65 : path.risk === 'mid' ? 45 : 28;
-      const startOff   = flowOffsets.get(path.key) || 0;
-      const offset     = ((startOff * DASH_PERIOD) + t * pxPerSec) % DASH_PERIOD;
-      const offsetFrac = offset / DASH_PERIOD;
-      const pulse      = 0.5 + 0.5 * Math.sin(t * (path.risk === 'high' ? 3 : 1.5) * Math.PI * 2);
+      // Viewport cull
+      const W=cvs.width, H=cvs.height, m=120;
+      let onScreen = false;
+      for (const [lng,lat] of path.coords) {
+        const p = map.project([lng,lat]);
+        if (p.x>-m && p.x<W+m && p.y>-m && p.y<H+m) { onScreen=true; break; }
+      }
+      if (!onScreen) continue;
+
+      const pxPerSec   = path.risk==='high'?65:path.risk==='mid'?45:28;
+      const startOff   = flowOffsets.get(path.key)||0;
+      const offset     = ((startOff*DASH_PERIOD)+t*pxPerSec)%DASH_PERIOD;
+      const offsetFrac = offset/DASH_PERIOD;
+      const pulse      = 0.5+0.5*Math.sin(t*(path.risk==='high'?3:1.5)*Math.PI*2);
       const color      = colorOf(path.risk);
 
-      const pts = path.coords.map(([lng, lat]) => {
-        const p = map.project([lng, lat]);
-        return [p.x, p.y];
+      const pts = path.coords.map(([lng,lat]) => {
+        const p = map.project([lng,lat]);
+        return [p.x,p.y];
       });
 
-      drawPath(pts, color, path.lineW, offsetFrac, path.risk, pulse);
+      if (path.isMain && selectedRiver) {
+        // ── Selected river: glowing cyan pulse ──────────────────────────────
+        // Outer glow pass (wide, faint, pulsing)
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth   = path.lineW * 4 + selPulse * 8;
+        ctx.lineCap     = 'round';
+        ctx.globalAlpha = 0.08 + selPulse * 0.10;
+        ctx.shadowColor = '#00e5ff';
+        ctx.shadowBlur  = 20 + selPulse * 20;
+        ctx.stroke();
+        // Mid glow
+        ctx.lineWidth   = path.lineW * 2.5;
+        ctx.globalAlpha = 0.18 + selPulse * 0.10;
+        ctx.shadowBlur  = 10;
+        ctx.stroke();
+        ctx.restore();
+        // Core line — brighter, faster dashes
+        drawDashes(pts, '#00e5ff', path.lineW * 1.6, offsetFrac, 0.95);
+      } else {
+        drawPath(pts, color, path.lineW, offsetFrac, path.risk, pulse);
+      }
     }
 
     ctx.globalAlpha = 1;
     requestAnimationFrame(animate);
   }
 
-  // Start after map is ready
+  // ── wire up ────────────────────────────────────────────────────────────────
+
   map.on('load', () => requestAnimationFrame(animate));
 })();
 
