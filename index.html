@@ -187,6 +187,13 @@ nav {
   font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--blue);
   display:none; pointer-events:none; backdrop-filter:blur(8px);
 }
+#zoomDebug {
+  position:absolute; bottom:92px; right:16px; z-index:500;
+  background:rgba(5,8,14,0.82); border:1px solid var(--border2);
+  border-radius:8px; padding:4px 9px;
+  font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text2);
+  pointer-events:none; backdrop-filter:blur(8px);
+}
 
 /* ── MAP LEGEND ── */
 .map-legend {
@@ -504,6 +511,7 @@ canvas#spark { width:100%; height:52px; display:block; margin-top:8px; }
     <canvas id="riverCanvas" style="position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;"></canvas>
     <canvas id="rainCanvas" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;"></canvas>
     <div id="radarTimestamp">⏱ --:--</div>
+    <div id="zoomDebug">Zoom -- · Radar ≤ z--</div>
     <div class="map-controls">
       <div class="mc-btn" onclick="map.zoomIn()" title="Zoom in">+</div>
       <div class="mc-btn" onclick="map.zoomOut()" title="Zoom out">−</div>
@@ -1305,7 +1313,7 @@ function focusGauge(el, lat, lng) {
 //  RAINVIEWER RADAR
 // ══════════════════════════════════════════
 let apiData = {}, mapFrames = [], animationPosition = 0, animationTimer = null, isPlaying = false;
-const RADAR_COLOR = 2, RADAR_SMOOTH = 1, RADAR_SNOW = 0, RADAR_SIZE = 256, RADAR_MAX_ZOOM = 9;
+const RADAR_COLOR = 2, RADAR_SMOOTH = 1, RADAR_SNOW = 0, RADAR_SIZE = 256, RADAR_MAX_ZOOM = 7;
 
 function loadRainViewerData() {
   fetch('https://api.rainviewer.com/public/weather-maps.json')
@@ -1348,7 +1356,7 @@ function showFrame(pos, preloadOnly) {
     });
     const ts = document.getElementById('radarTimestamp');
     if (ts && layerState.radar) {
-      ts.textContent = `⚠ Radar unavailable at zoom ${RADAR_MAX_ZOOM}+`;
+      ts.textContent = `⚠ Radar unavailable above calibrated zoom ${RADAR_MAX_ZOOM - 1}`;
       ts.style.color = '#f5c542';
     }
     return;
@@ -1375,6 +1383,14 @@ function showFrame(pos, preloadOnly) {
   }
 }
 
+function updateZoomDebug() {
+  const el = document.getElementById('zoomDebug');
+  if (!el) return;
+  const z = map.getZoom();
+  const radarVisibleMaxZoom = Math.max(0, RADAR_MAX_ZOOM - 1);
+  el.textContent = `Zoom ${z.toFixed(2)} · Radar ≤ z${radarVisibleMaxZoom}`;
+}
+
 function toggleRadarPlay() {
   const pill = document.getElementById('playPill');
   isPlaying = !isPlaying;
@@ -1389,9 +1405,11 @@ function animateRadar() {
 }
 setInterval(loadRainViewerData, 5 * 60 * 1000);
 map.on('zoom', () => {
+  updateZoomDebug();
   if (!layerState.radar || !mapFrames.length) return;
   showFrame(animationPosition, false);
 });
+map.on('load', updateZoomDebug);
 
 
 // ── Rain drops canvas ──
