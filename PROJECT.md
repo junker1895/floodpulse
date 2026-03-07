@@ -149,35 +149,29 @@ Thresholds derived from GloFAS historical baselines per gauge. Approximate until
 
 ### Frontend
 - **Single `index.html`** — entire app lives here
-- **Leaflet** — map rendering (to be replaced with MapLibre GL at global phase)
-- **Canvas API** — river flow animation (lines + particles drawn from GeoJSON)
+- **MapLibre GL 4.7.1** — vector tile rendering, GPU accelerated
+- **PMTiles** — HydroRIVERS river network tiles served from Cloudflare R2
+- **Canvas API** — sparkline (24h rainfall forecast) and animated rain overlay (80 particles)
 - **Vanilla JS** — no frameworks, no build tools, no bundlers
 - **GitHub Pages** — free static hosting
 
-### River flow system
-- Three GeoJSON LOD files loaded into memory on demand:
-  - `rivers-global.geojson` — zoom 2–5, stream order 1–3 (Amazon/Murray scale), ~3MB
-  - `rivers-regional.geojson` — zoom 6–8, stream order 1–5, ~15MB
-  - `rivers-local.geojson` — zoom 9+, stream order 1–7, ~40MB
-- `lodForZoom(zoom)` selects correct LOD — global/regional/local
-- Each LOD is fetched once and cached in memory — subsequent pans are instant local filtering
-- Screen coordinates pre-cached in `screenPtsCache` — rebuilt on moveend, never per-frame
-- HydroRIVERS geometry is already in correct flow direction — no reversal needed
-- `width` pre-calculated from `ORD_FLOW` by processing script (order 1 = widest)
-- Max 400 particles, prioritised by river width
-- No `shadowBlur` — too expensive on canvas at scale
-- River lines drawn on canvas from GeoJSON, particles animate on top
+### River rendering
+- Single `rivers.pmtiles` file hosted on Cloudflare R2 (processed from HydroRIVERS via `process_hydrorivers.py`)
+- PMTiles protocol registered: `maplibregl.addProtocol('pmtiles', protocol.tile.bind(protocol))`
+- MapLibre vector layer `rivers-base` (type: `line`)
+- `ORD_FLOW` attribute drives `line-width` and `line-opacity` via zoom-interpolated expressions
+- HydroRIVERS geometry is already in correct flow direction — no reversal logic needed
+- No canvas particles — rivers are native MapLibre vector lines
 
 ### Repo structure
 ```
 floodpulse/
 ├── index.html                    # Entire frontend app
-├── rivers-global.geojson         # HydroRIVERS zoom 2-5 (stream order 1-3)
-├── rivers-regional.geojson       # HydroRIVERS zoom 6-8 (stream order 1-5)
-├── rivers-local.geojson          # HydroRIVERS zoom 9+  (stream order 1-7)
-├── process_hydrorivers.py        # One-time script to regenerate river GeoJSON files
+├── process_hydrorivers.py        # One-time script used to generate rivers.pmtiles
+├── CLAUDE.md                     # Claude guidance file
 └── PROJECT.md                    # This file
 ```
+Note: `rivers.pmtiles` is served from Cloudflare R2, not committed to the repo.
 
 ---
 
@@ -260,18 +254,11 @@ When a backend is needed:
 
 When expanding beyond Australia:
 
-1. **Replace BOM Geofabric with HydroRIVERS** (WWF/USGS)
-   - Global, consistent attributes, free
-   - `ORD_FLOW` stream order (1–10) maps directly to zoom levels
-   - Has flow direction + upstream area — everything we need
-   - ~400MB shapefile → ~80–120MB as PMTiles
+1. ✅ **HydroRIVERS** — already in use. Global, CC BY 4.0, processed via `process_hydrorivers.py`
 
-2. **Replace Leaflet with MapLibre GL**
-   - Native vector tile rendering (GPU accelerated)
-   - Zoom-interpolated river styling via stream order
-   - Proper flow animation via shaders (true Windy-style)
+2. ✅ **MapLibre GL** — already in use. GPU-accelerated vector tile rendering
 
-3. **Tile pipeline**
+3. **Tile pipeline** — partially done (rivers.pmtiles on Cloudflare R2). Still needed: zoom-level filtering, global coverage beyond AU
    ```
    HydroRIVERS.shp → ogr2ogr → tippecanoe → PMTiles → Cloudflare R2
    ```
