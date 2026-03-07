@@ -1388,7 +1388,7 @@ function animateRadar() {
   animationTimer = setTimeout(animateRadar, next === mapFrames.length - 1 ? 1200 : 400);
 }
 setInterval(loadRainViewerData, 5 * 60 * 1000);
-map.on('zoomend', () => {
+map.on('zoom', () => {
   if (!layerState.radar || !mapFrames.length) return;
   showFrame(animationPosition, false);
 });
